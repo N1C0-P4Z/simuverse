@@ -37,24 +37,43 @@ const getInitials = (name: string) => {
 function SponsorLogo({ sponsor }: { sponsor: SponsorItem }) {
   const [imgError, setImgError] = useState(false);
 
-  const content = (
-    <div className="flex items-center gap-2.5 px-4 py-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-full border border-slate-200/80 dark:border-slate-700/80 shadow-sm hover:shadow-md hover:border-slate-300 transition-all duration-200 group">
-      {sponsor.logo_url && !imgError ? (
+  if (sponsor.logo_url && !imgError) {
+    const logoContent = (
+      <div className="group w-16 h-16 transition-all duration-300 flex items-center justify-center shrink-0">
         <img
           src={sponsor.logo_url}
           alt={sponsor.name}
-          className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-100"
+          className="w-full h-full object-contain grayscale opacity-70 transition-all duration-300 group-hover:grayscale-0 group-hover:opacity-100"
           onError={() => setImgError(true)}
         />
-      ) : (
-        <div
-          className={`w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 ${getColor(
-            sponsor.name,
-          )}`}
+      </div>
+    );
+
+    if (sponsor.website) {
+      return (
+        <a
+          href={sponsor.website}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={sponsor.name}
+          className="focus:outline-none focus:ring-2 focus:ring-slate-400 rounded-md"
         >
-          {getInitials(sponsor.name)}
-        </div>
-      )}
+          {logoContent}
+        </a>
+      );
+    }
+    return logoContent;
+  }
+
+  const content = (
+    <div className="flex items-center gap-2.5 px-4 py-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-full border border-slate-200/80 dark:border-slate-700/80 shadow-sm hover:shadow-md hover:border-slate-300 transition-all duration-200 group">
+      <div
+        className={`w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 ${getColor(
+          sponsor.name,
+        )}`}
+      >
+        {getInitials(sponsor.name)}
+      </div>
       <span className="text-xs font-medium text-slate-700 dark:text-slate-200 group-hover:text-slate-900 dark:group-hover:text-white transition-colors truncate max-w-[140px]">
         {sponsor.name}
       </span>
@@ -88,10 +107,14 @@ export function SponsorCarousel({ sponsors, title = 'Sponsors y Aliados' }: Spon
           {title}
         </p>
       )}
-      <div className="flex flex-wrap items-center justify-center gap-3 max-w-5xl mx-auto px-4">
-        {sponsors.map((sponsor) => (
-          <SponsorLogo key={sponsor.id} sponsor={sponsor} />
-        ))}
+      <div className="w-full overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <div className="flex items-center gap-4 w-max mx-auto px-4 py-2 snap-x">
+          {sponsors.map((sponsor) => (
+            <div key={sponsor.id} className="snap-center shrink-0">
+              <SponsorLogo sponsor={sponsor} />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
