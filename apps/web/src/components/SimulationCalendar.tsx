@@ -81,7 +81,8 @@ export function SimulationCalendar({ studentId }: { studentId?: string }) {
             apiClient.get('/assignments'),
             apiClient.get('/users/all'),
           ]);
-          setAllAssignments(assignRes.data || []);
+          const assignRaw = assignRes.data;
+          setAllAssignments(Array.isArray(assignRaw) ? assignRaw : (assignRaw?.data ?? []));
           const usersRaw = usersRes.data?.data ?? usersRes.data;
           setStudents((Array.isArray(usersRaw) ? usersRaw : []).filter((u: any) => u.role === 'student'));
         }

@@ -80,7 +80,8 @@ export default function TeacherSessionsPage() {
       if (courseId) params.set('course_id', courseId);
       if (studentId) params.set('student_id', studentId);
       const res = await apiClient.get(`/teacher/sessions?${params.toString()}`);
-      setSessions(Array.isArray(res.data) ? res.data : []);
+      const raw = res.data;
+      setSessions(Array.isArray(raw) ? raw : (raw?.data ?? []));
     } catch {
       setSessions([]);
     } finally {

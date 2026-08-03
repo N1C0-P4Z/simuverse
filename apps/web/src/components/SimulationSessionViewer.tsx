@@ -377,8 +377,8 @@ export function SimulationSessionViewer() {
     setLoading(true);
     try {
       const res = await apiClient.get('/simulation-sessions');
-      const data = res.data;
-      setSessions(Array.isArray(data) ? data : []);
+      const raw = res.data;
+      setSessions(Array.isArray(raw) ? raw : (raw?.data ?? []));
     } catch { setSessions([]); }
     finally { setLoading(false); }
   };

@@ -106,7 +106,8 @@ const Dashboard = () => {
       // refresh assignments
       if (user) {
         const assignRes = await apiClient.get(`/assignments?student_id=${user.id}`);
-        const assignList: Assignment[] = assignRes.data || [];
+        const assignRaw = assignRes.data;
+        const assignList: Assignment[] = Array.isArray(assignRaw) ? assignRaw : (assignRaw?.data ?? []);
         setAssignments(assignList);
         const coursesRes = await apiClient.get('/courses');
         const allCourses: Course[] = coursesRes.data || [];
@@ -141,7 +142,10 @@ const Dashboard = () => {
 
         // Para alumnos: verificar asignaciones primero
         const [assignRes, coursesRes] = await Promise.all([
-          apiClient.get(`/assignments?student_id=${user.id}`).then(r => r.data),
+          apiClient.get(`/assignments?student_id=${user.id}`).then(r => {
+            const raw = r.data;
+            return Array.isArray(raw) ? raw : (raw?.data ?? []);
+          }),
           apiClient.get('/courses'),
         ]);
 

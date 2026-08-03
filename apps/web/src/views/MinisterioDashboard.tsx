@@ -71,8 +71,10 @@ export default function MinisterioDashboard() {
       apiClient.get('/courses'),
     ])
       .then(([r, k, c]) => {
-        setReqs(Array.isArray(r.data) ? r.data : []);
-        setKpis(Array.isArray(k.data) ? k.data : []);
+        const reqsRaw = r.data;
+        const kpisRaw = k.data;
+        setReqs(Array.isArray(reqsRaw) ? reqsRaw : (reqsRaw?.data ?? []));
+        setKpis(Array.isArray(kpisRaw) ? kpisRaw : (kpisRaw?.data ?? []));
         setCourses(Array.isArray(c.data) ? c.data : []);
       })
       .catch(() => {})

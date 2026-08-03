@@ -58,7 +58,8 @@ const LegajosPage = () => {
     apiClient.get('/legajo/students')
       .then(r => r.data)
       .then(data => {
-        if (Array.isArray(data)) setStudents(data);
+        const list = Array.isArray(data) ? data : (data?.data ?? []);
+        if (Array.isArray(list)) setStudents(list);
         else if (data.error) setError(data.error);
         setFetching(false);
       })

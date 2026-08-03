@@ -91,4 +91,45 @@ describe('paginate', () => {
     expect(result.data).toEqual([]);
     expect(result.total).toBe(0);
   });
+
+  it('passes select option to findMany when provided', async () => {
+    mockModel.findMany.mockResolvedValue([]);
+    mockModel.count.mockResolvedValue(0);
+
+    const select = { id: true, name: true, simulations: { select: { id: true } } };
+    await paginate(mockModel, { role: 'student' }, { page: 1, limit: 20, select });
+
+    expect(mockModel.findMany).toHaveBeenCalledWith({
+      where: { role: 'student' },
+      skip: 0,
+      take: 20,
+      select,
+    });
+  });
+
+  it('passes include option to findMany when provided', async () => {
+    mockModel.findMany.mockResolvedValue([]);
+    mockModel.count.mockResolvedValue(0);
+
+    const include = { simulation: true, user: true };
+    await paginate(mockModel, {}, { page: 1, limit: 10, include });
+
+    expect(mockModel.findMany).toHaveBeenCalledWith({
+      where: {},
+      skip: 0,
+      take: 10,
+      include,
+    });
+  });
+
+  it('does not pass select/include when not provided', async () => {
+    mockModel.findMany.mockResolvedValue([]);
+    mockModel.count.mockResolvedValue(0);
+
+    await paginate(mockModel, {}, { page: 1, limit: 20 });
+
+    const callArgs = mockModel.findMany.mock.calls[0][0];
+    expect(callArgs).not.toHaveProperty('select');
+    expect(callArgs).not.toHaveProperty('include');
+  });
 });

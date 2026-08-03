@@ -90,7 +90,7 @@ export function AssignmentsABM() {
   useEffect(() => {
     setSelectedScenarios([]);
     if (selectedCourse) {
-      apiClient.get(`/scenarios?course_id=${selectedCourse}`)
+      apiClient.get(`/scenarios/dropdown/list?course_id=${selectedCourse}`)
         .then(r => setScenarios(Array.isArray(r.data) ? r.data : []))
         .catch(() => setScenarios([]));
     } else {
@@ -110,7 +110,9 @@ export function AssignmentsABM() {
   const fetchAssignments = async () => {
     try {
       const response = await apiClient.get('/assignments');
-      setAssignments(Array.isArray(response.data) ? response.data : []);
+      const result = response.data;
+      const list = Array.isArray(result) ? result : (result?.data ?? []);
+      setAssignments(list);
     } catch (error) {
       console.error('Error fetching assignments:', error);
       setAssignments([]);

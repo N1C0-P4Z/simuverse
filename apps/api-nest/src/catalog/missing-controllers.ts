@@ -159,24 +159,29 @@ export class LegajoController {
   constructor(private prisma: PrismaService) {}
 
   @Get('students')
-  async getStudents() {
-    const students = await this.prisma.user.findMany({
-      where: { role: 'student' },
+  async getStudents(@Query() pagination: PaginationDto) {
+    const result = await paginate((this.prisma as any).user, { role: 'student' }, {
+      page: pagination.page,
+      limit: pagination.limit,
       select: {
         id: true, name: true, email: true,
         simulations: { select: { id: true, status: true, score: true, progress_percentage: true } },
       },
     });
-    return students.map(s => ({
-      id: s.id,
-      name: s.name,
-      email: s.email,
-      total_sims: s.simulations.length,
-      completed: s.simulations.filter(sim => sim.status === 'completed').length,
-      avg_score: s.simulations.length > 0
-        ? s.simulations.filter(sim => sim.score).reduce((a, sim) => a + sim.score!, 0) / s.simulations.filter(sim => sim.score).length
-        : null,
-    }));
+
+    return {
+      ...result,
+      data: (result.data as any[]).map(s => ({
+        id: s.id,
+        name: s.name,
+        email: s.email,
+        total_sims: s.simulations.length,
+        completed: s.simulations.filter((sim: any) => sim.status === 'completed').length,
+        avg_score: s.simulations.length > 0
+          ? s.simulations.filter((sim: any) => sim.score).reduce((a: number, sim: any) => a + sim.score!, 0) / s.simulations.filter((sim: any) => sim.score).length
+          : null,
+      })),
+    };
   }
 
   @Get(':userId')
@@ -300,17 +305,21 @@ export class SimulationSessionsController {
   constructor(private prisma: PrismaService) {}
 
   @Get()
-  async findAll() {
-    const instances = await (this.prisma as any).simulationInstance.findMany({
+  async findAll(@Query() pagination: PaginationDto) {
+    const result = await paginate((this.prisma as any).simulationInstance, {}, {
+      page: pagination.page,
+      limit: pagination.limit,
+      orderBy: { started_at: 'desc' },
       include: {
         student: true,
         scenario: true,
         course: true,
       },
-      orderBy: { started_at: 'desc' }
-    }) as any[];
+    });
 
-    // Fetch chat logs for all instances in one query
+    const instances = result.data as any[];
+
+    // Fetch chat logs for paginated instances in one query
     const instanceIds = instances.map((i: any) => i.id);
     const allChatLogs = instanceIds.length > 0
       ? await (this.prisma as any).simulationChatLog.findMany({
@@ -324,28 +333,31 @@ export class SimulationSessionsController {
       logsByInstance.set(log.simulation_instance_id, arr);
     }
 
-    return instances.map((inst: any) => {
-      const chatLogs = logsByInstance.get(inst.id) || [];
-      return {
-        id: inst.id,
-        status: inst.status,
-        score: inst.score || 0,
-        started_at: inst.started_at,
-        completed_at: inst.completed_at,
-        time_spent_seconds: inst.time_spent_seconds || 0,
-        progress_percentage: inst.progress_percentage || 0,
-        student_name: inst.student ? inst.student.name : 'Unknown',
-        student_email: inst.student ? inst.student.email : '',
-        student_id: inst.student_id,
-        scenario_title: inst.scenario ? inst.scenario.title : 'Unknown',
-        scenario_type: inst.scenario ? inst.scenario.scenario_type : '',
-        difficulty: inst.scenario ? inst.scenario.difficulty : '',
-        course_title: inst.course ? inst.course.title : 'Unknown',
-        course_id: inst.course_id,
-        total_turns: chatLogs.length,
-        incorrect_turns: chatLogs.filter((l: any) => l.is_correct === false).length,
-      };
-    });
+    return {
+      ...result,
+      data: instances.map((inst: any) => {
+        const chatLogs = logsByInstance.get(inst.id) || [];
+        return {
+          id: inst.id,
+          status: inst.status,
+          score: inst.score || 0,
+          started_at: inst.started_at,
+          completed_at: inst.completed_at,
+          time_spent_seconds: inst.time_spent_seconds || 0,
+          progress_percentage: inst.progress_percentage || 0,
+          student_name: inst.student ? inst.student.name : 'Unknown',
+          student_email: inst.student ? inst.student.email : '',
+          student_id: inst.student_id,
+          scenario_title: inst.scenario ? inst.scenario.title : 'Unknown',
+          scenario_type: inst.scenario ? inst.scenario.scenario_type : '',
+          difficulty: inst.scenario ? inst.scenario.difficulty : '',
+          course_title: inst.course ? inst.course.title : 'Unknown',
+          course_id: inst.course_id,
+          total_turns: chatLogs.length,
+          incorrect_turns: chatLogs.filter((l: any) => l.is_correct === false).length,
+        };
+      }),
+    };
   }
 
   @Get('ref/:ref')
