@@ -310,6 +310,22 @@ export function DocumentsABM() {
         )}
       </div>
 
+      {/* Course filter */}
+      {!formOpen && (
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium text-gray-600">Filtrar por curso:</span>
+          <Select value={courseFilter} onValueChange={v => setCourseFilter(v === '__all__' ? '' : v)}>
+            <SelectTrigger className="w-64">
+              <SelectValue placeholder="Todos los cursos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todos los cursos</SelectItem>
+              {courses.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {formOpen && (
         <Card className={`p-6 border ${editingId ? 'border-amber-200 bg-amber-50' : 'border-blue-200 bg-blue-50'}`}>
           <h3 className="text-lg font-semibold mb-4">
@@ -440,21 +456,10 @@ export function DocumentsABM() {
                   <FileText className="w-5 h-5 text-blue-600" />
                   <div>
                     <h4 className="font-semibold text-lg">{doc.document_name}</h4>
-                    <div className="flex gap-3 mt-1 text-sm">
+                     <div className="flex gap-3 mt-1 text-sm">
                       <span className="text-gray-600">Curso: {getCourseName(doc.course_id)}</span>
-        </div>
-        {!formOpen && (
-          <Select value={courseFilter} onValueChange={v => setCourseFilter(v === '__all__' ? '' : v)}>
-            <SelectTrigger className="w-52 shrink-0">
-              <SelectValue placeholder="Todos los cursos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">Todos los cursos</SelectItem>
-              {courses.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        )}
-      </div>
+                    </div>
+                  </div>
                 </div>
                 {doc.file_url && (
                   <button

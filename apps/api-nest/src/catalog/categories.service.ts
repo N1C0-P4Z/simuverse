@@ -65,4 +65,10 @@ export class CategoriesService {
     await this.prisma.category.update({ where: { id }, data: { is_active: true } });
     return { message: 'Category reactivated' };
   }
+
+  async hardRemove(id: number) {
+    await this.findOne(id);
+    await this.prisma.category.delete({ where: { id } });
+    return { message: 'Category permanently deleted' };
+  }
 }

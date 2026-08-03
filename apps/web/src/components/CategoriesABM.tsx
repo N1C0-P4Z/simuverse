@@ -9,13 +9,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useAdmin } from '@/lib/admin-context';
 import { apiClient } from '@/services/ApiClient';
-import { Edit2, Plus, Trash2 } from 'lucide-react';
+import { Edit2, EyeOff, Eye, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -25,6 +26,7 @@ interface Category {
   code: string;
   description: string;
   created_at: string;
+  is_active?: boolean;
 }
 
 export function CategoriesABM() {
@@ -34,6 +36,8 @@ export function CategoriesABM() {
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
+  const [showInactive, setShowInactive] = useState(false);
+  const [hardDeleteCategory, setHardDeleteCategory] = useState<Category | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -96,10 +100,10 @@ export function CategoriesABM() {
     try {
       await apiClient.delete(`/categories/${deletingCategory.id}`);
       await fetchCategories();
-      toast.success('Categoría eliminada');
+      toast.success('Categoría desactivada');
     } catch (error) {
       console.error('Error deleting category:', error);
-      toast.error('Error al eliminar la categoría');
+      toast.error('Error al desactivar la categoría');
     } finally {
       setDeletingCategory(null);
     }
@@ -133,6 +137,8 @@ export function CategoriesABM() {
     return <div className="p-8 text-center">Cargando categorías...</div>;
   }
 
+  const filtered = categories.filter(c => showInactive ? true : c.is_active !== false);
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -140,15 +146,26 @@ export function CategoriesABM() {
           <h2 className="text-2xl font-bold">Gestión de Categorías</h2>
           <p className="text-gray-600 mt-1">Crea y administra familias de cursos</p>
         </div>
-{!isAddingNew && !readOnly && (
+        <div className="flex items-center gap-3">
           <Button
-            onClick={() => setIsAddingNew(true)}
-            className="bg-blue-600 hover:bg-blue-700"
+            variant="outline"
+            size="sm"
+            onClick={() => setShowInactive(v => !v)}
+            title={showInactive ? 'Ocultar inactivos' : 'Mostrar inactivos'}
           >
-            <Plus className="w-4 h-4 mr-2" />
-            Nueva Categoría
+            {showInactive ? <EyeOff className="w-4 h-4 mr-1" /> : <Eye className="w-4 h-4 mr-1" />}
+            {showInactive ? 'Ocultar inactivos' : 'Mostrar inactivos'}
           </Button>
-        )}
+          {!isAddingNew && !readOnly && (
+            <Button
+              onClick={() => setIsAddingNew(true)}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Nueva Categoría
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Form para agregar/editar */}
@@ -204,11 +221,14 @@ export function CategoriesABM() {
 
       {/* Lista de categorías */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {categories.map((category) => (
+        {filtered.map((category) => (
           <Card key={category.id} className="p-4">
             <div className="flex justify-between items-start">
               <div className="flex-1">
-                <h4 className="font-semibold text-lg">{category.name}</h4>
+                <div className="flex items-center gap-2">
+                  <h4 className="font-semibold text-lg">{category.name}</h4>
+                  {category.is_active === false && <Badge variant="secondary" className="text-xs bg-gray-400">Inactivo</Badge>}
+                </div>
                 <p className="text-sm text-gray-500">Código: {category.code}</p>
                 {category.description && (
                   <p className="text-sm mt-2 text-gray-600">{category.description}</p>
@@ -217,51 +237,95 @@ export function CategoriesABM() {
                   Creado: {new Date(category.created_at).toLocaleDateString()}
                 </p>
               </div>
-<div className="flex gap-2">
-                {!readOnly && <Button
-                  onClick={() => handleEdit(category)}
-                  size="sm"
-                  variant="outline"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </Button>}
-                {!readOnly && (category as any).is_active !== false && <Button
-                  onClick={() => handleDelete(category)}
-                  size="sm"
-                  variant="outline"
-                  className="text-red-600"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>}
-                {!readOnly && (category as any).is_active === false && <Button
-                  onClick={() => handleReactivate(category.id)}
-                  size="sm"
-                  variant="outline"
-                  className="text-green-600 border-green-300"
-                >🔄</Button>}
+              <div className="flex gap-2">
+                {!readOnly && (
+                  <Button
+                    onClick={() => handleEdit(category)}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </Button>
+                )}
+                {!readOnly && category.is_active !== false && (
+                  <Button
+                    onClick={() => handleDelete(category)}
+                    size="sm"
+                    variant="outline"
+                    className="text-red-600"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                )}
+                {!readOnly && category.is_active === false && (
+                  <Button
+                    onClick={() => handleReactivate(category.id)}
+                    size="sm"
+                    variant="outline"
+                    className="text-green-600 border-green-300"
+                  ><RefreshCw className="w-4 h-4" /></Button>
+                )}
+                {!readOnly && category.is_active === false && (
+                  <Button
+                    onClick={() => setHardDeleteCategory(category)}
+                    size="sm"
+                    variant="outline"
+                    className="text-red-600 border-red-400"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                )}
               </div>
             </div>
           </Card>
         ))}
       </div>
 
-      {categories.length === 0 && !isAddingNew && (
+      {filtered.length === 0 && !isAddingNew && (
         <Card className="p-8 text-center">
           <p className="text-gray-600">No hay categorías. ¡Crea una para empezar!</p>
         </Card>
       )}
 
+      {/* Soft-delete confirmation */}
       <AlertDialog open={!!deletingCategory} onOpenChange={o => { if (!o) setDeletingCategory(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar categoría?</AlertDialogTitle>
+            <AlertDialogTitle>¿Desactivar categoría?</AlertDialogTitle>
             <AlertDialogDescription>
-              Se eliminará la categoría &quot;{deletingCategory?.name}&quot;. Esta acción no se puede deshacer.
+              Se desactivará la categoría &quot;{deletingCategory?.name}&quot;. No se mostrará en los listados pero se conservan sus datos.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete}>Confirmar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Hard-delete confirmation */}
+      <AlertDialog open={!!hardDeleteCategory} onOpenChange={o => { if (!o) setHardDeleteCategory(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-red-600">Eliminar categoría permanentemente</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción es irreversible. Se eliminará la categoría &quot;{hardDeleteCategory?.name}&quot;.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-red-800 hover:bg-red-900"
+              onClick={async () => {
+                if (!hardDeleteCategory) return;
+                try {
+                  await apiClient.delete(`/categories/${hardDeleteCategory.id}/hard`);
+                  toast.success('Categoría eliminada permanentemente');
+                  setHardDeleteCategory(null);
+                  fetchCategories();
+                } catch { toast.error('Error al eliminar'); }
+              }}>
+              Sí, eliminar permanentemente
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

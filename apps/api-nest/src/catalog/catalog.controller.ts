@@ -73,6 +73,12 @@ export class CatalogController {
     return this.categoriesService.reactivate(id);
   }
 
+  @Delete('categories/:id/hard')
+  @HttpCode(HttpStatus.OK)
+  async hardRemoveCategory(@Param('id', ParseIntPipe) id: number) {
+    return this.categoriesService.hardRemove(id);
+  }
+
   // ── Tech Sheets ─────────────────────────────────────────────────
 
   @Get('tech-sheets/valid/list')

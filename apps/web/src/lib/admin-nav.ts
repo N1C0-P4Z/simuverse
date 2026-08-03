@@ -81,8 +81,8 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     items: [
       { id: 'companies', label: 'Empresas', icon: Building, permissionCode: 'companies.manage' },
       { id: 'foundation', label: 'Fundación', icon: HandHeart, permissionCode: 'foundation.manage' },
-      { id: 'endorsers', label: 'Avaladores', icon: UserCheck, permissionCode: 'endorsers.manage' },
-      { id: 'sponsors', label: 'Sponsors', icon: Handshake, permissionCode: 'sponsors.manage' },
+      { id: 'endorsers', label: 'Auspiciantes', icon: UserCheck, permissionCode: 'endorsers.manage' },
+      { id: 'sponsors', label: 'Patrocinadores', icon: Handshake, permissionCode: 'sponsors.manage' },
     ],
   },
 ];
