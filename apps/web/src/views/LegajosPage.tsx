@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuth } from '@/hooks/useAuth';
 import {
     AlertCircle, BarChart3,
@@ -46,6 +47,10 @@ const LegajosPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'activity' | 'score'>('activity');
+  const [courseFilter, setCourseFilter] = useState('');
+  const [teacherFilter, setTeacherFilter] = useState('');
+  const [courses, setCourses] = useState<Array<{ id: string; title: string }>>([]);
+  const [teachers, setTeachers] = useState<Array<{ id: string; name: string }>>([]);
 
   useEffect(() => {
     if (!loading && user && !hasRole('admin') && !hasRole('teacher') && !hasRole('ministerio') && !hasRole('supervisor')) {
@@ -55,7 +60,11 @@ const LegajosPage = () => {
 
   useEffect(() => {
     if (!user) return;
-    apiClient.get('/legajo/students')
+    const params = new URLSearchParams();
+    if (courseFilter) params.set('course_id', courseFilter);
+    if (teacherFilter) params.set('teacher_id', teacherFilter);
+    const qs = params.toString();
+    apiClient.get(`/legajo/students${qs ? `?${qs}` : ''}`)
       .then(r => r.data)
       .then(data => {
         if (Array.isArray(data)) setStudents(data);
@@ -66,6 +75,19 @@ const LegajosPage = () => {
         setError(err.message || 'Error al cargar alumnos');
         setFetching(false);
       });
+  }, [user, courseFilter, teacherFilter]);
+
+  // Fetch courses and teachers for filter dropdowns
+  useEffect(() => {
+    if (!user) return;
+    apiClient.get('/courses').then(r => {
+      const list = Array.isArray(r.data) ? r.data : [];
+      setCourses(list.map((c: any) => ({ id: c.id, title: c.title })));
+    }).catch(() => {});
+    apiClient.get('/users', { params: { role: 'teacher' } }).then(r => {
+      const list = Array.isArray(r.data) ? r.data : [];
+      setTeachers(list.map((t: any) => ({ id: t.id, name: t.name })));
+    }).catch(() => {});
   }, [user]);
 
   const n = (v: string | number | null) => (v === null || v === undefined ? 0 : Number(v));
@@ -147,6 +169,24 @@ const LegajosPage = () => {
               <SelectItem value="score">Mejor puntaje</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={courseFilter} onValueChange={v => setCourseFilter(v === '__all__' ? '' : v)}>
+            <SelectTrigger className="w-48 shrink-0">
+              <SelectValue placeholder="Todos los cursos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todos los cursos</SelectItem>
+              {courses.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={teacherFilter} onValueChange={v => setTeacherFilter(v === '__all__' ? '' : v)}>
+            <SelectTrigger className="w-48 shrink-0">
+              <SelectValue placeholder="Todos los docentes" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todos los docentes</SelectItem>
+              {teachers.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
           {search && (
             <Badge variant="outline" className="shrink-0">
               {filtered.length} resultado{filtered.length !== 1 ? 's' : ''}
@@ -197,76 +237,74 @@ const LegajosPage = () => {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map(student => {
-              const sims = n(student.total_simulations);
-              const evals = n(student.total_evaluations);
-              const avg = student.avg_score !== null ? n(student.avg_score) : null;
-              const best = student.best_score !== null ? n(student.best_score) : null;
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Alumno</TableHead>
+                  <TableHead className="text-center">Sims.</TableHead>
+                  <TableHead className="text-center">Eval.</TableHead>
+                  <TableHead className="text-center">Prom.</TableHead>
+                  <TableHead>Mejor puntaje</TableHead>
+                  <TableHead>Última actividad</TableHead>
+                  <TableHead className="w-8"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map(student => {
+                  const sims = n(student.total_simulations);
+                  const evals = n(student.total_evaluations);
+                  const avg = student.avg_score !== null ? n(student.avg_score) : null;
+                  const best = student.best_score !== null ? n(student.best_score) : null;
 
-              return (
-                <Card
-                  key={student.id}
-                  className="hover:shadow-md transition-all duration-200 cursor-pointer group border hover:border-primary/30"
-                  onClick={() => router.push(`/student-ledger/${student.id}`)}
-                >
-                  <CardContent className="pt-5 pb-4">
-                    {/* Header */}
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold truncate group-hover:text-primary transition-colors leading-tight">
-                          {student.name}
-                        </h3>
-                        <p className="text-xs text-muted-foreground truncate mt-0.5">{student.email}</p>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0 ml-2 mt-0.5" />
-                    </div>
-
-                    {/* Stats row */}
-                    <div className="grid grid-cols-3 gap-1.5 mb-3">
-                      <div className="text-center bg-muted/40 rounded-md py-2">
-                        <p className="text-lg font-bold leading-none">{sims}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Sims.</p>
-                      </div>
-                      <div className="text-center bg-muted/40 rounded-md py-2">
-                        <p className="text-lg font-bold leading-none">{evals}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Sim.</p>
-                      </div>
-                      <div className="text-center bg-muted/40 rounded-md py-2">
-                        <p className={`text-lg font-bold leading-none ${scoreColor(avg)}`}>
-                          {avg !== null ? avg.toFixed(0) : '—'}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Prom.</p>
-                      </div>
-                    </div>
-
-                    {/* Best score bar */}
-                    {best !== null && (
-                      <div className="mb-2">
-                        <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                          <span>Mejor puntaje</span>
-                          <span className={`font-semibold ${scoreColor(best)}`}>{best}/100</span>
+                  return (
+                    <TableRow
+                      key={student.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => router.push(`/student-ledger/${student.id}`)}
+                    >
+                      <TableCell>
+                        <div className="min-w-0">
+                          <p className="font-semibold truncate">{student.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{student.email}</p>
                         </div>
-                        <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all ${getScoreBarColor(best)}`}
-                            style={{ width: `${best}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Last activity */}
-                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-2">
-                      <Clock className="w-3 h-3 shrink-0" />
-                      {student.last_activity
-                        ? `Activo: ${new Date(student.last_activity).toLocaleDateString('es-AR')}`
-                        : 'Sin actividad registrada'}
-                    </p>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                      </TableCell>
+                      <TableCell className="text-center font-medium">{sims}</TableCell>
+                      <TableCell className="text-center font-medium">{evals}</TableCell>
+                      <TableCell className={`text-center font-medium ${scoreColor(avg)}`}>
+                        {avg !== null ? avg.toFixed(0) : '—'}
+                      </TableCell>
+                      <TableCell>
+                        {best !== null ? (
+                          <div className="flex items-center gap-2 min-w-[120px]">
+                            <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${getScoreBarColor(best)}`}
+                                style={{ width: `${best}%` }}
+                              />
+                            </div>
+                            <span className={`text-xs font-semibold ${scoreColor(best)}`}>{best}</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Clock className="w-3 h-3 shrink-0" />
+                          {student.last_activity
+                            ? new Date(student.last_activity).toLocaleDateString('es-AR')
+                            : 'Sin actividad'}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           </div>
         )}
 

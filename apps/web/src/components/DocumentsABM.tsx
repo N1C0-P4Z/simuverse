@@ -2,12 +2,14 @@
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { API_BASE, authFetch } from '@/lib/api';
 import { useAdmin } from '@/lib/admin-context';
 import { apiClient } from '@/services/ApiClient';
 import { ExternalLink, FileText, Paperclip, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { ALLOWED_EXTENSIONS } from '@simuverse/shared';
 
 interface Document {
   id: number;
@@ -25,18 +27,6 @@ interface Course {
 }
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
-const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.png', '.jpg', '.jpeg', '.txt'];
-const ALLOWED_MIME_TYPES = [
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'text/csv',
-  'image/png',
-  'image/jpeg',
-  'text/plain',
-];
 
 function isValidHttpsUrl(url: string): boolean {
   try {
@@ -74,15 +64,21 @@ export function DocumentsABM() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({ ...emptyForm });
+  const [courseFilter, setCourseFilter] = useState('');
 
   useEffect(() => {
     fetchDocuments();
     fetchCourses();
   }, []);
 
-  const fetchDocuments = async () => {
+  useEffect(() => {
+    fetchDocuments(courseFilter);
+  }, [courseFilter]);
+
+  const fetchDocuments = async (courseId?: string) => {
     try {
-      const response = await apiClient.get('/documents');
+      const params = courseId ? { course_id: courseId } : undefined;
+      const response = await apiClient.get('/documents', { params });
       const data = response.data;
       setDocuments(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -135,8 +131,8 @@ export function DocumentsABM() {
     if (!file) return;
 
     const ext = `.${file.name.split('.').pop()?.toLowerCase() || ''}`;
-    if (!ALLOWED_EXTENSIONS.includes(ext) && !ALLOWED_MIME_TYPES.includes(file.type)) {
-      toast.error('Tipo de archivo no permitido. Usá PDF, DOC, DOCX, XLS, XLSX, CSV, PNG, JPG o TXT.');
+    if (!(ALLOWED_EXTENSIONS as readonly string[]).includes(ext)) {
+      toast.error('Tipo de archivo no permitido. Usá PDF, DOC, DOCX, XLS, XLSX o CSV.');
       e.target.value = '';
       return;
     }
@@ -356,7 +352,7 @@ export function DocumentsABM() {
                 ref={fileInputRef}
                 type="file"
                 className="hidden"
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg,.txt"
+                accept={ALLOWED_EXTENSIONS.join(',')}
                 onChange={handleFileChange}
               />
               <div className="flex flex-wrap items-center gap-2">
@@ -391,7 +387,7 @@ export function DocumentsABM() {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-gray-500">Máximo 5 MB. PDF, DOC, DOCX, XLS, XLSX, CSV, imágenes o TXT.</p>
+              <p className="text-xs text-gray-500">Máximo 5 MB. {ALLOWED_EXTENSIONS.join(', ')}.</p>
             </div>
 
             <div>
@@ -446,8 +442,19 @@ export function DocumentsABM() {
                     <h4 className="font-semibold text-lg">{doc.document_name}</h4>
                     <div className="flex gap-3 mt-1 text-sm">
                       <span className="text-gray-600">Curso: {getCourseName(doc.course_id)}</span>
-                    </div>
-                  </div>
+        </div>
+        {!formOpen && (
+          <Select value={courseFilter} onValueChange={v => setCourseFilter(v === '__all__' ? '' : v)}>
+            <SelectTrigger className="w-52 shrink-0">
+              <SelectValue placeholder="Todos los cursos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todos los cursos</SelectItem>
+              {courses.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
                 </div>
                 {doc.file_url && (
                   <button

@@ -153,9 +153,46 @@ export class LegajoController {
   constructor(private prisma: PrismaService) {}
 
   @Get('students')
-  async getStudents() {
+  async getStudents(
+    @Query('course_id') courseId?: string,
+    @Query('teacher_id') teacherId?: string,
+  ) {
+    // Resolve student IDs from filters
+    let studentIds: string[] | undefined;
+
+    if (teacherId) {
+      // Teacher → courses → simulation assignments → student IDs
+      const teacherCourses = await this.prisma.courseTeacher.findMany({
+        where: { teacher_id: teacherId },
+        select: { course_id: true },
+      });
+      const courseIds = teacherCourses.map(ct => ct.course_id);
+      if (courseIds.length === 0) return [];
+      const assignments = await this.prisma.simulationAssignment.findMany({
+        where: { course_id: { in: courseIds } },
+        select: { student_id: true },
+        distinct: ['student_id'],
+      });
+      studentIds = assignments.map(a => a.student_id);
+      if (studentIds.length === 0) return [];
+    }
+
+    if (courseId) {
+      // Direct course filter
+      const courseAssignments = await this.prisma.simulationAssignment.findMany({
+        where: { course_id: courseId, ...(studentIds ? { student_id: { in: studentIds } } : {}) },
+        select: { student_id: true },
+        distinct: ['student_id'],
+      });
+      studentIds = courseAssignments.map(a => a.student_id);
+      if (studentIds.length === 0) return [];
+    }
+
+    const where: any = { role: 'student' };
+    if (studentIds) where.id = { in: studentIds };
+
     const students = await this.prisma.user.findMany({
-      where: { role: 'student' },
+      where,
       select: {
         id: true, name: true, email: true,
         simulations: { select: { id: true, status: true, score: true, progress_percentage: true } },
