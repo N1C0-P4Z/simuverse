@@ -228,7 +228,7 @@ export function TechSheetsABM() {
         </div>
       </Card>
 
-      <TechSheetForm courses={courses} onSubmit={fetchTechSheets} />
+      <TechSheetForm courses={courses} onSubmit={refreshList} />
 
       <div className="grid grid-cols-1 gap-4">
         {sheets.map((sheet) => (
