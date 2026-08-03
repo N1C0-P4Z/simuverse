@@ -11,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
   ForbiddenException,
+  ValidationPipe,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -33,7 +34,7 @@ export class UsersController {
   @Roles('admin')
   @Permissions('users.manage')
   async findAll(
-    @Query() pagination: PaginationDto,
+    @Query(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: false, transform: true })) pagination: PaginationDto,
     @Query('q') search?: string,
     @Query('role') role?: string,
   ) {
