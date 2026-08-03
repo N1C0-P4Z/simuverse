@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { paginate, PaginatedResult } from '../common/helpers/paginate';
 import { CreateTechSheetDto } from './dto/create-tech-sheet.dto';
 import { UpdateTechSheetDto } from './dto/update-tech-sheet.dto';
 import { UpdateTechSheetConfigDto } from './dto/update-tech-sheet-config.dto';
@@ -13,7 +14,12 @@ export class TechSheetsService {
     private analysisPipeline: AnalysisPipelineService,
   ) {}
 
-  async findAll() {
+  async findAll(opts?: { page?: number; limit?: number }): Promise<PaginatedResult<any>> {
+    const { page = 1, limit = 20 } = opts || {};
+    return paginate(this.prisma.techSheet, {}, { page, limit, orderBy: { created_at: 'desc' } });
+  }
+
+  async findAllDropdown() {
     return this.prisma.techSheet.findMany({ orderBy: { created_at: 'desc' } });
   }
 

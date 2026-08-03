@@ -171,7 +171,7 @@ const AdminPanel = ({ tabId }: { tabId?: string }) => {
     if (user) {
       fetchCourses();
       // Cargar categorías
-      apiClient.get('/categories')
+      apiClient.get('/categories/dropdown/list')
         .then(r => setDbCategories(Array.isArray(r.data) ? r.data : []))
         .catch(() => {});
       apiClient.get('/simulated-companies')

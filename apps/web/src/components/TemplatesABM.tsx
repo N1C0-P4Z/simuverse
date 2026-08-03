@@ -15,12 +15,14 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useAdmin } from '@/lib/admin-context';
 import { apiClient } from '@/services/ApiClient';
+import { usePagination } from '@/hooks/usePagination';
 import {
     Bot,
     Calculator,
@@ -147,8 +149,9 @@ const AI_QUESTIONS = [
 
 export function TemplatesABM() {
   const { readOnly } = useAdmin();
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: templates, total, page, totalPages, setPage, loading, setExtraParams } = usePagination<Template>({
+    endpoint: '/templates/flow',
+  });
   const [aiDialogOpen, setAiDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -163,6 +166,13 @@ export function TemplatesABM() {
   const [generating, setGenerating] = useState(false);
   const [generatedTemplate, setGeneratedTemplate] = useState<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Sync showInactive to pagination
+  useEffect(() => {
+    const params: Record<string, unknown> = {};
+    if (showInactive) params.includeInactive = 'true';
+    setExtraParams(params);
+  }, [showInactive, setExtraParams]);
 
   // Form state (for both generated and manual edit)
   const [form, setForm] = useState({
@@ -184,17 +194,7 @@ export function TemplatesABM() {
 
   // ── Data ─────────────────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    loadTemplates();
-  }, [showInactive]);
-
-  const loadTemplates = async () => {
-    try {
-      const res = await apiClient.get(`/templates/flow`);
-      setTemplates(Array.isArray(res.data) ? res.data : []);
-    } catch { setTemplates([]); }
-    finally { setLoading(false); }
-  };
+  const refreshList = () => setPage(page);
 
   // ── AI Wizard ─────────────────────────────────────────────────────────────────
 
@@ -326,7 +326,7 @@ export function TemplatesABM() {
       }
       setEditDialogOpen(false);
       setEditingId(null);
-      await loadTemplates();
+      refreshList();
     } catch { toast.error('Error al guardar la plantilla'); }
     finally { setSaving(false); }
   };
@@ -338,7 +338,7 @@ export function TemplatesABM() {
         onClick: async () => {
           try {
             await apiClient.delete(`/templates/flow/${id}`);
-            await loadTemplates();
+            refreshList();
             toast.success('Plantilla eliminada');
           } catch { toast.error('Error al eliminar la plantilla'); }
         },
@@ -350,7 +350,7 @@ export function TemplatesABM() {
   const handleReactivate = async (id: string) => {
     try {
       await apiClient.put(`/templates/flow/${id}`, { is_active: true });
-      await loadTemplates();
+      refreshList();
       toast.success('Plantilla reactivada');
     } catch { toast.error('Error al reactivar'); }
   };
@@ -367,7 +367,7 @@ export function TemplatesABM() {
       version: t.version,
       template_data: JSON.stringify(data),
     });
-    await loadTemplates();
+    refreshList();
   };
 
   const handleEdit = (t: Template) => {
@@ -492,6 +492,42 @@ export function TemplatesABM() {
               </Card>
             );
           })}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {total > 0 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-gray-500">{total} plantilla{total !== 1 ? 's' : ''}</p>
+          {totalPages > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => page > 1 && setPage(page - 1)}
+                    className={page <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <PaginationItem key={p}>
+                    <PaginationLink
+                      isActive={p === page}
+                      onClick={() => setPage(p)}
+                      className="cursor-pointer"
+                    >
+                      {p}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => page < totalPages && setPage(page + 1)}
+                    className={page >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
         </div>
       )}
 

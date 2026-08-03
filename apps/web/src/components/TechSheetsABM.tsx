@@ -1,9 +1,11 @@
 'use client'
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { PipelineOutput, PipelineStatus, useAnalysisProgress } from '@/hooks/useAnalysisProgress';
 import { API_BASE, authFetch } from '@/lib/api';
 import { apiClient } from '@/services/ApiClient';
+import { usePagination } from '@/hooks/usePagination';
 import { Plus } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -18,9 +20,10 @@ interface Course {
 }
 
 export function TechSheetsABM() {
-  const [sheets, setSheets] = useState<TechSheet[]>([]);
+  const { data: sheets, total, page, totalPages, setPage, loading } = usePagination<TechSheet>({
+    endpoint: '/tech-sheets',
+  });
   const [courses, setCourses] = useState<Course[]>([]);
-  const [loading, setLoading] = useState(true);
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [configSheetId, setConfigSheetId] = useState<number | null>(null);
   const [configCourseId, setConfigCourseId] = useState<string | null>(null);
@@ -32,14 +35,15 @@ export function TechSheetsABM() {
   const { status: pollStatus, output: pollOutput, isLoading: pollLoading, error: pollError } =
     useAnalysisProgress(analyzingSheetId, analyzingSheetId !== null);
 
+  const refreshList = () => setPage(page);
+
   useEffect(() => {
-    fetchTechSheets();
     fetchCourses();
   }, []);
 
   useEffect(() => {
     if (pollStatus === 'completed') {
-      fetchTechSheets();
+      refreshList();
       setAnalyzingSheetId(null);
       toast.success('Analisis completado exitosamente');
     } else if (pollStatus === 'failed' || pollStatus === 'validation_rejected') {
@@ -53,18 +57,6 @@ export function TechSheetsABM() {
       setCourses(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching courses:', error);
-    }
-  };
-
-  const fetchTechSheets = async () => {
-    try {
-      const response = await apiClient.get('/tech-sheets');
-      setSheets(Array.isArray(response.data) ? response.data : []);
-    } catch (error) {
-      console.error('Error fetching tech sheets:', error);
-      setSheets([]);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -133,12 +125,12 @@ export function TechSheetsABM() {
     toast.error('Estas seguro de eliminar esta ficha tecnica?', {
       action: {
         label: 'Eliminar',
-        onClick: async () => {
+            onClick: async () => {
           try {
             await authFetch(`${API_BASE}/tech-sheets/${id}`, {
               method: 'DELETE',
             });
-            await fetchTechSheets();
+            refreshList();
             toast.success('Ficha tecnica eliminada');
           } catch (error) {
             console.error('Error deleting tech sheet:', error);
@@ -200,7 +192,7 @@ export function TechSheetsABM() {
       setEditingSheetId(null);
       setEditingCompetencies('');
       setEditingKpis('');
-      await fetchTechSheets();
+      refreshList();
       toast.success('Ficha tecnica completada exitosamente.');
     } catch (error) {
       console.error('Error updating tech sheet:', error);
@@ -270,6 +262,42 @@ export function TechSheetsABM() {
         <Card className="p-8 text-center">
           <p className="text-gray-600">No hay fichas tecnicas. Sube una ficha del ministerio para empezar.</p>
         </Card>
+      )}
+
+      {/* Pagination */}
+      {total > 0 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-gray-500">{total} ficha{total !== 1 ? 's' : ''} técnica{total !== 1 ? 's' : ''}</p>
+          {totalPages > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => page > 1 && setPage(page - 1)}
+                    className={page <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <PaginationItem key={p}>
+                    <PaginationLink
+                      isActive={p === page}
+                      onClick={() => setPage(p)}
+                      className="cursor-pointer"
+                    >
+                      {p}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => page < totalPages && setPage(page + 1)}
+                    className={page >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
+        </div>
       )}
 
       {editingSheetId && (

@@ -18,6 +18,7 @@ import { CreateFlowTemplateDto } from './dto/create-flow-template.dto';
 import { UpdateFlowTemplateDto } from './dto/update-flow-template.dto';
 import { CreatePromptTemplateDto } from './dto/create-prompt-template.dto';
 import { UpdatePromptTemplateDto } from './dto/update-prompt-template.dto';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
@@ -39,11 +40,21 @@ export class TemplatesController {
 
   @Get('flow')
   async findAllFlowTemplates(
+    @Query() pagination: PaginationDto,
     @Query('family') family?: string,
     @Query('course_id') courseId?: string,
     @Query('active') active?: string,
+    @Query('includeInactive') includeInactive?: string,
   ) {
-    return this.flowTemplatesService.findAll({ family, course_id: courseId, active });
+    return this.flowTemplatesService.findAll(
+      { family, course_id: courseId, active, includeInactive },
+      { page: pagination.page, limit: pagination.limit },
+    );
+  }
+
+  @Get('flow/dropdown/list')
+  async findAllFlowTemplatesDropdown() {
+    return this.flowTemplatesService.findAllDropdown();
   }
 
   @Get('flow/:id')

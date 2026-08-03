@@ -1,14 +1,21 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { paginate, PaginatedResult } from '../common/helpers/paginate';
 
 @Injectable()
 export class ScenariosService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(filters?: { course_id?: string; difficulty?: string; scenario_type?: string; active?: boolean }) {
+  async findAll(filters?: { course_id?: string; difficulty?: string; scenario_type?: string; active?: boolean; includeInactive?: boolean }, opts?: { page?: number; limit?: number }): Promise<PaginatedResult<any>> {
+    const { page = 1, limit = 20 } = opts || {};
     const where: any = {};
-    if (filters?.active !== undefined) where.is_active = filters.active;
-    else where.is_active = true;
+    if (filters?.includeInactive) {
+      // No is_active filter — show all
+    } else if (filters?.active !== undefined) {
+      where.is_active = filters.active;
+    } else {
+      where.is_active = true;
+    }
 
     if (filters?.course_id) {
       where.course_id = filters.course_id;
@@ -20,10 +27,11 @@ export class ScenariosService {
       where.scenario_type = filters.scenario_type;
     }
 
-    return this.prisma.scenario.findMany({
-      where,
-      orderBy: { created_at: 'desc' },
-    });
+    return paginate(this.prisma.scenario, where, { page, limit, orderBy: { created_at: 'desc' } });
+  }
+
+  async findAllDropdown() {
+    return this.prisma.scenario.findMany({ where: { is_active: true }, orderBy: { created_at: 'desc' } });
   }
 
   async findById(id: string) {

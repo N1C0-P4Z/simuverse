@@ -113,44 +113,62 @@ export class CoursesService {
   async catalog(opts: { q?: string; tag?: string; page?: number; limit?: number } = {}) {
     const page = Math.max(1, opts.page ?? 1);
     const limit = Math.min(100, Math.max(1, opts.limit ?? 20));
+    const skip = (page - 1) * limit;
 
-    const courses = await this.prisma.course.findMany({
-      where: { is_active: true },
-      include: {
-        teachers: {
-          include: {
-            teacher: { select: { id: true, name: true, email: true } },
+    const needle = (opts.q || '').trim().toLowerCase();
+    const tag = (opts.tag || '').trim().toLowerCase();
+
+    // Build Prisma where clause
+    const where: any = { is_active: true };
+
+    if (needle) {
+      where.OR = [
+        { title: { contains: needle, mode: 'insensitive' } },
+        { category: { contains: needle, mode: 'insensitive' } },
+        {
+          teachers: {
+            some: {
+              teacher: {
+                OR: [
+                  { name: { contains: needle, mode: 'insensitive' } },
+                  { email: { contains: needle, mode: 'insensitive' } },
+                ],
+              },
+            },
           },
         },
-      },
-      orderBy: { title: 'asc' },
-    });
+      ];
+    }
+
+    if (tag) {
+      // Filter by the main category field (exact match, case-insensitive)
+      where.category = { equals: tag, mode: 'insensitive' };
+    }
+
+    const [courses, total] = await Promise.all([
+      this.prisma.course.findMany({
+        where,
+        include: {
+          teachers: {
+            include: {
+              teacher: { select: { id: true, name: true, email: true } },
+            },
+          },
+        },
+        orderBy: { title: 'asc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.course.count({ where }),
+    ]);
 
     const courseTags = (c: (typeof courses)[number]): string[] => {
       const cats = Array.isArray(c.categories) ? (c.categories as string[]) : [];
       return [c.category, ...cats].filter(Boolean).map((t) => String(t));
     };
 
-    const needle = (opts.q || '').trim().toLowerCase();
-    const tag = (opts.tag || '').trim().toLowerCase();
-    const filtered = courses.filter((c) => {
-      const matchesNeedle =
-        !needle ||
-        c.title.toLowerCase().includes(needle) ||
-        c.teachers.some(
-          (t) =>
-            t.teacher.name.toLowerCase().includes(needle) ||
-            t.teacher.email.toLowerCase().includes(needle),
-        );
-      const matchesTag = !tag || courseTags(c).some((t) => t.toLowerCase() === tag);
-      return matchesNeedle && matchesTag;
-    });
-
-    const total = filtered.length;
-    const paged = filtered.slice((page - 1) * limit, page * limit);
-
     return {
-      data: paged.map((c) => ({
+      data: courses.map((c) => ({
         id: c.id,
         course_id: c.course_id,
         title: c.title,

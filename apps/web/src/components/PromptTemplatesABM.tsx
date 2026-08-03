@@ -74,7 +74,7 @@ export function PromptTemplatesABM() {
     try {
       const [coursesRes, sheetsRes] = await Promise.all([
         apiClient.get('/courses'),
-        apiClient.get('/tech-sheets'),
+        apiClient.get('/tech-sheets/dropdown/list'),
       ]);
       const courses: Course[] = Array.isArray(coursesRes.data) ? coursesRes.data : [];
       const sheets: TechSheet[] = Array.isArray(sheetsRes.data) ? sheetsRes.data : [];

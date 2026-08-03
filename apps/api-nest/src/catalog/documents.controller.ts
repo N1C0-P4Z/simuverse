@@ -16,6 +16,7 @@ import { DocumentsService } from './documents.service';
 import { AssignmentsService } from './assignments.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
@@ -30,8 +31,16 @@ export class DocumentsController {
   constructor(private documentsService: DocumentsService) {}
 
   @Get('documents')
-  async findAll(@Query('course_id') courseId?: string) {
-    return this.documentsService.findAll(courseId);
+  async findAll(
+    @Query() pagination: PaginationDto,
+    @Query('course_id') courseId?: string,
+  ) {
+    return this.documentsService.findAll(courseId, { page: pagination.page, limit: pagination.limit });
+  }
+
+  @Get('documents/dropdown/list')
+  async findAllDropdown(@Query('course_id') courseId?: string) {
+    return this.documentsService.findAllDropdown(courseId);
   }
 
   @Get('documents/:id')
