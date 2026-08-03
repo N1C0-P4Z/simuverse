@@ -175,20 +175,24 @@ const AdminPanel = ({ tabId }: { tabId?: string }) => {
         .then(r => setDbCategories(Array.isArray(r.data) ? r.data : []))
         .catch(() => {});
       apiClient.get('/simulated-companies')
-        .then(r => r.data)
+        .then(r => { const d = r.data?.data ?? r.data; return d; })
         .then(d => setSimCompanies(Array.isArray(d) ? d.map((c: any) => ({ id: c.id, name: c.name, short_name: c.short_name })) : []))
         .catch(() => {});
       apiClient.get('/endorsers')
-        .then(r => setEndorsersList(Array.isArray(r.data) ? r.data.map((e: any) => ({ id: e.id, name: e.name })) : []))
+        .then(r => { const d = r.data?.data ?? r.data; return d; })
+        .then(d => setEndorsersList(Array.isArray(d) ? d.map((e: any) => ({ id: e.id, name: e.name })) : []))
         .catch(() => {});
       apiClient.get('/foundation-config')
-        .then(r => setFoundationsList(Array.isArray(r.data) ? r.data.map((f: any) => ({ id: f.id, name: f.name })) : []))
+        .then(r => { const d = r.data?.data ?? r.data; return d; })
+        .then(d => setFoundationsList(Array.isArray(d) ? d.map((f: any) => ({ id: f.id, name: f.name })) : []))
         .catch(() => {});
       apiClient.get('/sponsors')
-        .then(r => setSponsorsList(Array.isArray(r.data) ? r.data.map((s: any) => ({ id: s.id, name: s.name })) : []))
+        .then(r => { const d = r.data?.data ?? r.data; return d; })
+        .then(d => setSponsorsList(Array.isArray(d) ? d.map((s: any) => ({ id: s.id, name: s.name })) : []))
         .catch(() => {});
       apiClient.get('/users?role=teacher')
-        .then(r => setTeachers(Array.isArray(r.data) ? r.data : []))
+        .then(r => { const d = r.data?.data ?? r.data; return d; })
+        .then(d => setTeachers(Array.isArray(d) ? d : []))
         .catch(() => {});
     }
   }, [user]);

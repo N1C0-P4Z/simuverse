@@ -13,15 +13,23 @@ describe('SponsorsService', () => {
         findUnique: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        count: jest.fn(),
       },
     };
     service = new SponsorsService(prisma as PrismaService);
   });
 
-  it('findAll orders by name', async () => {
+  it('findAll orders by name and returns paginated result', async () => {
     prisma.sponsor.findMany.mockResolvedValue([]);
-    await service.findAll();
-    expect(prisma.sponsor.findMany).toHaveBeenCalledWith({ orderBy: { name: 'asc' } });
+    prisma.sponsor.count.mockResolvedValue(0);
+    const result = await service.findAll();
+    expect(prisma.sponsor.findMany).toHaveBeenCalledWith({
+      where: {},
+      skip: 0,
+      take: 20,
+      orderBy: { name: 'asc' },
+    });
+    expect(result).toEqual({ data: [], total: 0, page: 1, limit: 20 });
   });
 
   it('findOne throws NotFoundException for a missing sponsor', async () => {
@@ -51,5 +59,40 @@ describe('SponsorsService', () => {
     prisma.sponsor.update.mockResolvedValue({ id: 1, is_active: true });
     await service.reactivate(1);
     expect(prisma.sponsor.update).toHaveBeenCalledWith({ where: { id: 1 }, data: { is_active: true } });
+  });
+
+  describe('findAll with pagination', () => {
+    it('returns paginated result with default page=1, limit=20', async () => {
+      const sponsors = [{ id: 1, name: 'Acme' }, { id: 2, name: 'Beta' }];
+      prisma.sponsor.findMany.mockResolvedValue(sponsors);
+      prisma.sponsor.count.mockResolvedValue(2);
+
+      const result = await service.findAll();
+
+      expect(result).toEqual({ data: sponsors, total: 2, page: 1, limit: 20 });
+      expect(prisma.sponsor.findMany).toHaveBeenCalledWith({
+        where: {},
+        skip: 0,
+        take: 20,
+        orderBy: { name: 'asc' },
+      });
+      expect(prisma.sponsor.count).toHaveBeenCalledWith({ where: {} });
+    });
+
+    it('returns paginated result with custom page and limit', async () => {
+      const sponsors = [{ id: 3, name: 'Gamma' }];
+      prisma.sponsor.findMany.mockResolvedValue(sponsors);
+      prisma.sponsor.count.mockResolvedValue(10);
+
+      const result = await service.findAll({ page: 2, limit: 5 });
+
+      expect(result).toEqual({ data: sponsors, total: 10, page: 2, limit: 5 });
+      expect(prisma.sponsor.findMany).toHaveBeenCalledWith({
+        where: {},
+        skip: 5,
+        take: 5,
+        orderBy: { name: 'asc' },
+      });
+    });
   });
 });

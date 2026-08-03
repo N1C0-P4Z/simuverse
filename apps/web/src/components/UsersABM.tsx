@@ -22,12 +22,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Eye, EyeOff, Mail, RefreshCw, Search, Settings, Trash2, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import { useAdmin } from '@/lib/admin-context';
 import { apiClient } from '@/services/ApiClient';
+import { usePagination } from '@/hooks/usePagination';
 
 interface UserRow {
   id: string;
@@ -41,9 +43,10 @@ interface UserRow {
 
 export function UsersABM() {
   const { readOnly } = useAdmin();
-  const [users, setUsers] = useState<UserRow[]>([]);
+  const { data: users, total, page, totalPages, setPage, loading, error, setExtraParams } = usePagination<UserRow>({
+    endpoint: '/users',
+  });
   const [rolesList, setRolesList] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState('all');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -54,16 +57,6 @@ export function UsersABM() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [hardDeleteConfirm, setHardDeleteConfirm] = useState<string | null>(null);
 
-  const fetchUsers = async () => {
-    setLoading(true);
-    try {
-      const res = await apiClient.get('/users/all');
-      const data = res.data;
-      setUsers(Array.isArray(data) ? data : []);
-    } catch { toast.error('Error al cargar usuarios'); }
-    finally { setLoading(false); }
-  };
-
   const fetchRoles = async () => {
     try {
       const res = await apiClient.get('/roles');
@@ -71,7 +64,18 @@ export function UsersABM() {
     } catch { toast.error('Error al cargar roles'); }
   };
 
-  useEffect(() => { fetchUsers(); fetchRoles(); }, []);
+  useEffect(() => { fetchRoles(); }, []);
+
+  // Debounced search — resets page to 1 via setExtraParams
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const params: Record<string, unknown> = {};
+      if (search) params.q = search;
+      if (filterRole !== 'all') params.role = filterRole;
+      setExtraParams(params);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search, filterRole, setExtraParams]);
 
   const handleOpen = (user: UserRow) => {
     setForm({ name: user.name, email: user.email, password: '', role: user.role });
@@ -90,7 +94,7 @@ export function UsersABM() {
       await apiClient.put(`/users/${editingId}`, payload);
       toast.success('Usuario actualizado');
       setDialogOpen(false);
-      fetchUsers();
+      setPage(page); // trigger re-fetch
     } catch (e: any) {
       toast.error(e.message || 'Error al guardar');
     }
@@ -102,7 +106,7 @@ export function UsersABM() {
       await apiClient.delete(`/users/${id}`);
       toast.success('Usuario eliminado');
       setDeleteConfirm(null);
-      fetchUsers();
+      setPage(page); // trigger re-fetch
     } catch { toast.error('Error al eliminar usuario'); }
   };
 
@@ -111,7 +115,7 @@ export function UsersABM() {
       await apiClient.put(`/users/${id}/reactivate`);
       toast.success('Usuario reactivado');
       setDeleteConfirm(null);
-      fetchUsers();
+      setPage(page); // trigger re-fetch
     } catch { toast.error('Error al reactivar usuario'); }
   };
 
@@ -120,7 +124,7 @@ export function UsersABM() {
       await apiClient.delete(`/users/${id}/hard`);
       toast.success('Usuario eliminado permanentemente');
       setHardDeleteConfirm(null);
-      fetchUsers();
+      setPage(page); // trigger re-fetch
     } catch (e: any) { toast.error(e.message || 'Error al eliminar usuario'); }
   };
 
@@ -128,12 +132,6 @@ export function UsersABM() {
     const r = rolesList.find(x => x.name === role);
     return r ? { label: r.description || r.name, color: r.color } : { label: role, color: '#9CA3AF' };
   };
-
-  const filtered = users.filter(u =>
-    (filterRole === 'all' || u.role === filterRole) &&
-    (search === '' || u.name.toLowerCase().includes(search.toLowerCase()) ||
-     u.email.toLowerCase().includes(search.toLowerCase()))
-  );
 
   return (
     <div className="space-y-6">
@@ -213,9 +211,9 @@ export function UsersABM() {
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {users.length === 0 ? (
                 <tr><td colSpan={5} className="px-4 py-10 text-center text-gray-400">Sin usuarios para los filtros aplicados.</td></tr>
-              ) : filtered.map(u => (
+              ) : users.map(u => (
                 <tr key={u.id} className="border-b hover:bg-gray-50">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
@@ -267,6 +265,42 @@ export function UsersABM() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        {total > 0 && (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-500">{total} usuario{total !== 1 ? 's' : ''}</p>
+            {totalPages > 1 && (
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={() => page > 1 && setPage(page - 1)}
+                      className={page <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                    />
+                  </PaginationItem>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                    <PaginationItem key={p}>
+                      <PaginationLink
+                        isActive={p === page}
+                        onClick={() => setPage(p)}
+                        className="cursor-pointer"
+                      >
+                        {p}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ))}
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={() => page < totalPages && setPage(page + 1)}
+                      className={page >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            )}
+          </div>
+        )}
         </>
       )}
 

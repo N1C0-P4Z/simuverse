@@ -2,14 +2,18 @@ import { Controller, Get, Post, Put, Delete, Param, Body, Query, NotFoundExcepti
 import { FileInterceptor } from '@nestjs/platform-express';
 import { PrismaService } from '../prisma/prisma.service';
 import { logoUploadOptions, resolveLogoUrl, cleanupOldLogo } from '../files/logo-upload';
+import { PaginationDto } from '../common/dto/pagination.dto';
+import { paginate } from '../common/helpers/paginate';
 
 // ── Foundation Config ────────────────────────────────────────────
 @Controller('foundation-config')
 export class FoundationConfigController {
   constructor(private prisma: PrismaService) {}
 
-  @Get() async findAll() {
-    return (this.prisma as any).foundationConfig.findMany({
+  @Get() async findAll(@Query() pagination: PaginationDto) {
+    return paginate((this.prisma as any).foundationConfig, {}, {
+      page: pagination.page,
+      limit: pagination.limit,
       orderBy: { id: 'asc' },
     });
   }
@@ -86,8 +90,10 @@ export class FoundationConfigController {
 export class EndorsersController {
   constructor(private prisma: PrismaService) {}
 
-  @Get() async findAll() {
-    return (this.prisma as any).endorser.findMany({
+  @Get() async findAll(@Query() pagination: PaginationDto) {
+    return paginate((this.prisma as any).endorser, {}, {
+      page: pagination.page,
+      limit: pagination.limit,
       orderBy: { id: 'asc' },
     });
   }

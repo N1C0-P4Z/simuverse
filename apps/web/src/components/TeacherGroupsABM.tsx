@@ -47,7 +47,8 @@ export function TeacherGroupsABM() {
         apiClient.get('/users/all'),
       ]);
       setGroups(groupsRes.data || []);
-      const usersData = usersRes.data || [];
+      const usersRaw = usersRes.data?.data ?? usersRes.data;
+      const usersData = Array.isArray(usersRaw) ? usersRaw : [];
       setTeachers(usersData.filter((u: User) => u.role === 'teacher'));
       setStudents(usersData.filter((u: User) => u.role === 'student'));
       if (!selectedTeacher && usersData.filter((u: User) => u.role === 'teacher').length > 0) {

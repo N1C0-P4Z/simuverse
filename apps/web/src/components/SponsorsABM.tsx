@@ -6,12 +6,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { LogoField, useFilePreview } from '@/components/ui/logo-field';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Globe, Handshake, Plus, RotateCw, Settings, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { useAdmin } from '@/lib/admin-context';
 import { apiClient } from '@/services/ApiClient';
+import { usePagination } from '@/hooks/usePagination';
 
 interface Sponsor {
   id: number;
@@ -48,24 +50,15 @@ function LogoDisplay({ name, logoUrl, size = 'md' }: { name: string; logoUrl?: s
 
 export function SponsorsABM() {
   const { readOnly } = useAdmin();
-  const [sponsors, setSponsors] = useState<Sponsor[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: sponsors, total, page, totalPages, setPage, loading, error } = usePagination<Sponsor>({
+    endpoint: '/sponsors',
+  });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const filePreviewUrl = useFilePreview(logoFile);
-
-  const fetchAll = async () => {
-    try {
-      const r = await apiClient.get('/sponsors');
-      setSponsors(Array.isArray(r.data) ? r.data : []);
-    } catch { setSponsors([]); }
-    setLoading(false);
-  };
-
-  useEffect(() => { fetchAll(); }, []);
 
   const buildPayload = (): FormData | typeof form => {
     if (!logoFile) return form;
@@ -93,7 +86,7 @@ export function SponsorsABM() {
       setForm(emptyForm());
       setLogoFile(null);
       setEditingId(null);
-      fetchAll();
+      setPage(page); // trigger re-fetch
     } catch (e: any) { toast.error(e.message); }
     setSaving(false);
   };
@@ -113,7 +106,7 @@ export function SponsorsABM() {
           try {
             await apiClient.delete(`/sponsors/${id}`);
             toast.success('Sponsor desactivado');
-            fetchAll();
+            setPage(page); // trigger re-fetch
           } catch { toast.error('Error al desactivar'); }
         },
       },
@@ -124,12 +117,13 @@ export function SponsorsABM() {
   const handleReactivate = async (id: number) => {
     try {
       await apiClient.put(`/sponsors/${id}/reactivate`);
-      fetchAll();
+      setPage(page); // trigger re-fetch
       toast.success('Sponsor reactivado');
     } catch { toast.error('Error al reactivar'); }
   };
 
   if (loading) return <div className="p-8 text-center text-muted-foreground">Cargando...</div>;
+  if (error) return <div className="p-8 text-center text-red-500">Error: {error}</div>;
 
   return (
     <div className="space-y-8">
@@ -206,10 +200,45 @@ export function SponsorsABM() {
         ))}
       </div>
 
-      {sponsors.length === 0 && (
+      {total === 0 && (
         <div className="text-center py-10 text-muted-foreground">
           <Handshake className="w-10 h-10 mx-auto mb-3 opacity-50" />
           <p>No hay sponsors. Agregá el primero.</p>
+        </div>
+      )}
+
+      {total > 0 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-gray-500">{total} sponsor{total !== 1 ? 's' : ''}</p>
+          {totalPages > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => page > 1 && setPage(page - 1)}
+                    className={page <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <PaginationItem key={p}>
+                    <PaginationLink
+                      isActive={p === page}
+                      onClick={() => setPage(p)}
+                      className="cursor-pointer"
+                    >
+                      {p}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => page < totalPages && setPage(page + 1)}
+                    className={page >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
         </div>
       )}
     </div>

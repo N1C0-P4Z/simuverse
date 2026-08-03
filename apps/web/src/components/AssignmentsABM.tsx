@@ -130,7 +130,8 @@ export function AssignmentsABM() {
   const fetchStudents = async () => {
     try {
       const response = await apiClient.get('/users?role=student');
-      setUsers(Array.isArray(response.data) ? response.data : []);
+      const raw = response.data?.data ?? response.data;
+      setUsers(Array.isArray(raw) ? raw : []);
     } catch (error) {
       console.error('Error fetching students:', error);
       setUsers([]);

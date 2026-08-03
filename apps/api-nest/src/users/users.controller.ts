@@ -15,6 +15,7 @@ import {
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -31,8 +32,12 @@ export class UsersController {
   @Get()
   @Roles('admin')
   @Permissions('users.manage')
-  async findAll(@Query('role') role?: string) {
-    return this.usersService.findAll(role);
+  async findAll(
+    @Query() pagination: PaginationDto,
+    @Query('q') search?: string,
+    @Query('role') role?: string,
+  ) {
+    return this.usersService.findAll({ page: pagination.page, limit: pagination.limit, search, role });
   }
 
   @Public()
