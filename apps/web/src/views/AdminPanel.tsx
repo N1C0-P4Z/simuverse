@@ -738,12 +738,12 @@ const AdminPanel = ({ tabId }: { tabId?: string }) => {
                     </div>
 
                     <div className="space-y-2">
-                      <Label className="text-sm font-semibold">🤝 Avaladores <span className="text-gray-400 font-normal">(opcional)</span></Label>
+                      <Label className="text-sm font-semibold">🤝 Auspiciantes <span className="text-gray-400 font-normal">(opcional)</span></Label>
                       <MultiSelect
                         items={endorsersList}
                         selected={form.endorser_ids}
                         onChange={ids => setForm(p => ({ ...p, endorser_ids: ids }))}
-                        placeholder="Sin avaladores"
+                        placeholder="Sin auspiciantes"
                       />
                     </div>
 
@@ -758,12 +758,12 @@ const AdminPanel = ({ tabId }: { tabId?: string }) => {
                     </div>
 
                     <div className="space-y-2">
-                      <Label className="text-sm font-semibold">💼 Sponsors <span className="text-gray-400 font-normal">(opcional)</span></Label>
+                      <Label className="text-sm font-semibold">💼 Patrocinadores <span className="text-gray-400 font-normal">(opcional)</span></Label>
                       <MultiSelect
                         items={sponsorsList}
                         selected={form.sponsor_ids}
                         onChange={ids => setForm(p => ({ ...p, sponsor_ids: ids }))}
-                        placeholder="Sin sponsors"
+                        placeholder="Sin patrocinadores"
                       />
                     </div>
 

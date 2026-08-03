@@ -422,6 +422,14 @@ export class CoursesService {
       throw new NotFoundException('Course not found');
     }
 
+    // Check duplicate enrollment BEFORE rate-limit counting
+    const existingAssignment = await this.prisma.simulationAssignment.findFirst({
+      where: { student_id: studentId, course_id: course.id },
+    });
+    if (existingAssignment) {
+      throw new ConflictException('Ya estás inscrito');
+    }
+
     const since = new Date(Date.now() - ENROLL_WINDOW_MS);
     const recentFails = await this.prisma.enrollmentAttempt.count({
       where: {
@@ -436,13 +444,6 @@ export class CoursesService {
         'Too many enrollment attempts. Try again later.',
         HttpStatus.TOO_MANY_REQUESTS,
       );
-    }
-
-    const existing = await this.prisma.simulationAssignment.findFirst({
-      where: { student_id: studentId, course_id: course.id },
-    });
-    if (existing) {
-      return existing;
     }
 
     if (course.password_hash) {

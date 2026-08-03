@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { CoursesService } from './courses.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -8,7 +8,7 @@ describe('CoursesService — association sync', () => {
 
   beforeEach(() => {
     prisma = {
-      course: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+      course: { findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
       courseEndorser: { deleteMany: jest.fn(), createMany: jest.fn() },
       courseSimulatedCompany: { deleteMany: jest.fn(), createMany: jest.fn() },
       courseFoundationConfig: { deleteMany: jest.fn(), createMany: jest.fn() },
@@ -17,7 +17,8 @@ describe('CoursesService — association sync', () => {
       simulation: { findMany: jest.fn().mockResolvedValue([]) },
       simulationChatLog: { deleteMany: jest.fn() },
       simulationEvaluation: { deleteMany: jest.fn() },
-      simulationAssignment: { deleteMany: jest.fn() },
+      simulationAssignment: { deleteMany: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
+      enrollmentAttempt: { count: jest.fn().mockResolvedValue(0), create: jest.fn() },
       courseDocument: { deleteMany: jest.fn() },
       flowTemplate: { deleteMany: jest.fn() },
       $transaction: jest.fn((callback: any) => callback(prisma)),
@@ -143,6 +144,43 @@ describe('CoursesService — association sync', () => {
       expect(prisma.courseDocument.deleteMany).toHaveBeenCalledWith({ where: { course_id: 'course-1' } });
       expect(prisma.flowTemplate.deleteMany).toHaveBeenCalledWith({ where: { course_id: 'course-1' } });
       expect(prisma.course.delete).toHaveBeenCalledWith({ where: { id: 'course-1' } });
+    });
+  });
+
+  describe('enroll()', () => {
+    const activeCourse = { id: 'course-1', course_id: 'C1', password_hash: null, is_active: true };
+
+    beforeEach(() => {
+      prisma.course.findFirst.mockResolvedValue(activeCourse);
+      prisma.simulationAssignment.findFirst.mockResolvedValue(null);
+      prisma.simulationAssignment.create.mockResolvedValue({ id: 'assign-1' });
+    });
+
+    it('throws ConflictException when student is already enrolled', async () => {
+      prisma.simulationAssignment.findFirst.mockResolvedValue({ id: 'existing-assign' });
+
+      await expect(
+        service.enroll('course-1', 'student-1'),
+      ).rejects.toThrow(ConflictException);
+
+      expect(prisma.simulationAssignment.create).not.toHaveBeenCalled();
+    });
+
+    it('does not increment enrollment attempt counter on duplicate', async () => {
+      prisma.simulationAssignment.findFirst.mockResolvedValue({ id: 'existing-assign' });
+
+      await expect(
+        service.enroll('course-1', 'student-1'),
+      ).rejects.toThrow(ConflictException);
+
+      expect(prisma.enrollmentAttempt.create).not.toHaveBeenCalled();
+    });
+
+    it('creates assignment on first enrollment', async () => {
+      const result = await service.enroll('course-1', 'student-1');
+
+      expect(prisma.simulationAssignment.create).toHaveBeenCalled();
+      expect(result).toEqual({ id: 'assign-1' });
     });
   });
 });

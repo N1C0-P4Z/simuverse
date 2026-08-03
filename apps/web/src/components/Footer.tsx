@@ -57,7 +57,7 @@ export function Footer({ sponsors: initialSponsors, courseId: propCourseId, clas
         {/* Sponsors Carousel */}
         {sponsors.length > 0 && (
           <div className="border-b border-slate-800 pb-6">
-            <SponsorCarousel sponsors={sponsors} title="Sponsors" />
+            <SponsorCarousel sponsors={sponsors} title="Patrocinadores" />
           </div>
         )}
 

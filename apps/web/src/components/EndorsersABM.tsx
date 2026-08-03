@@ -116,7 +116,7 @@ export function EndorsersABM() {
       } else {
         await apiClient.post('/endorsers', payload);
       }
-      toast.success(editingId ? 'Avalador actualizado' : 'Avalador creado');
+      toast.success(editingId ? 'Auspiciante actualizado' : 'Auspiciante creado');
       setDialogOpen(false);
       setForm(emptyForm());
       setLogoFile(null);
@@ -134,13 +134,13 @@ export function EndorsersABM() {
   };
 
   const handleDeactivate = (id: number) => {
-    toast.error('¿Desactivar este avalador?', {
+    toast.error('¿Desactivar este auspiciante?', {
       action: {
         label: 'Desactivar',
         onClick: async () => {
           try {
             await apiClient.delete(`/endorsers/${id}`);
-            toast.success('Avalador desactivado');
+            toast.success('Auspiciante desactivado');
             fetchAll();
           } catch { toast.error('Error al desactivar'); }
         },
@@ -153,7 +153,7 @@ export function EndorsersABM() {
     try {
       await apiClient.put(`/endorsers/${id}/reactivate`);
       fetchAll();
-      toast.success('Avalador reactivado');
+      toast.success('Auspiciante reactivado');
     } catch { toast.error('Error al reactivar'); }
   };
 
@@ -164,16 +164,16 @@ export function EndorsersABM() {
       {/* Header + Add */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold flex items-center gap-2"><Handshake className="w-6 h-6" /> Avaladores</h2>
-          <p className="text-gray-600 mt-1">Organizaciones o instituciones que avalan las simulaciones. Se pueden vincular a cursos específicos.</p>
+          <h2 className="text-2xl font-bold flex items-center gap-2"><Handshake className="w-6 h-6" /> Auspiciantes</h2>
+          <p className="text-gray-600 mt-1">Organizaciones o instituciones que auspician las simulaciones. Se pueden vincular a cursos específicos.</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={o => { setDialogOpen(o); if (!o) { setForm(emptyForm()); setLogoFile(null); setEditingId(null); } }}>
 {!readOnly && <DialogTrigger asChild>
-              <Button><Plus className="w-4 h-4 mr-2" /> Nuevo Avalador</Button>
+              <Button><Plus className="w-4 h-4 mr-2" /> Nuevo Auspiciante</Button>
             </DialogTrigger>}
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{editingId ? 'Editar Avalador' : 'Nuevo Avalador'}</DialogTitle>
+              <DialogTitle>{editingId ? 'Editar Auspiciante' : 'Nuevo Auspiciante'}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 mt-2">
               {/* Preview */}
@@ -185,7 +185,7 @@ export function EndorsersABM() {
                     </div>
                 }
                 <div>
-                  <p className="font-semibold">{form.name || 'Nombre del avalador'}</p>
+                  <p className="font-semibold">{form.name || 'Nombre del auspiciante'}</p>
                   <p className="text-xs text-gray-500 flex items-center gap-1"><EndorsementTypeIcon type={form.endorsement_type} className="w-3.5 h-3.5" /> {ENDORSEMENT_TYPES.find(t => t.value === form.endorsement_type)?.label || ''}</p>
                 </div>
               </div>
@@ -200,7 +200,7 @@ export function EndorsersABM() {
                   <Input value={form.short_name} onChange={e => setForm(p => ({ ...p, short_name: e.target.value }))} placeholder="MinProd" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Tipo de avalador</Label>
+                  <Label>Tipo de auspiciante</Label>
                   <Select value={form.endorsement_type} onValueChange={v => setForm(p => ({ ...p, endorsement_type: v }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -227,14 +227,14 @@ export function EndorsersABM() {
               </div>
 
               <Button className="w-full" onClick={handleSave} disabled={saving}>
-                {saving ? 'Guardando...' : editingId ? 'Actualizar' : 'Crear Avalador'}
+                {saving ? 'Guardando...' : editingId ? 'Actualizar' : 'Crear Auspiciante'}
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Grid de avaladores */}
+      {/* Grid de auspiciantes */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {endorsers.map(e => (
           <Card key={e.id} className="overflow-hidden hover:shadow-md transition-shadow">
@@ -262,7 +262,7 @@ export function EndorsersABM() {
       {endorsers.length === 0 && (
         <div className="text-center py-10 text-muted-foreground">
           <Handshake className="w-10 h-10 mx-auto mb-3 opacity-50" />
-          <p>No hay avaladores. Agregá el primero.</p>
+          <p>No hay auspiciantes. Agregá el primero.</p>
         </div>
       )}
     </div>

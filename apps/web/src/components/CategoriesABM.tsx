@@ -1,4 +1,14 @@
 'use client'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -23,6 +33,7 @@ export function CategoriesABM() {
   const [loading, setLoading] = useState(true);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -76,23 +87,22 @@ export function CategoriesABM() {
     }
   };
 
-  const handleDelete = (id: number) => {
-    toast.error('¿Estás seguro de eliminar esta categoría?', {
-      action: {
-        label: 'Eliminar',
-        onClick: async () => {
-          try {
-            await apiClient.delete(`/categories/${id}`);
-            await fetchCategories();
-            toast.success('Categoría eliminada');
-          } catch (error) {
-            console.error('Error deleting category:', error);
-            toast.error('Error al eliminar la categoría');
-          }
-        },
-      },
-      duration: 5000,
-    });
+  const handleDelete = (category: Category) => {
+    setDeletingCategory(category);
+  };
+
+  const confirmDelete = async () => {
+    if (!deletingCategory) return;
+    try {
+      await apiClient.delete(`/categories/${deletingCategory.id}`);
+      await fetchCategories();
+      toast.success('Categoría eliminada');
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      toast.error('Error al eliminar la categoría');
+    } finally {
+      setDeletingCategory(null);
+    }
   };
 
   const handleReactivate = async (id: number) => {
@@ -216,7 +226,7 @@ export function CategoriesABM() {
                   <Edit2 className="w-4 h-4" />
                 </Button>}
                 {!readOnly && (category as any).is_active !== false && <Button
-                  onClick={() => handleDelete(category.id)}
+                  onClick={() => handleDelete(category)}
                   size="sm"
                   variant="outline"
                   className="text-red-600"
@@ -240,6 +250,21 @@ export function CategoriesABM() {
           <p className="text-gray-600">No hay categorías. ¡Crea una para empezar!</p>
         </Card>
       )}
+
+      <AlertDialog open={!!deletingCategory} onOpenChange={o => { if (!o) setDeletingCategory(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar categoría?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminará la categoría &quot;{deletingCategory?.name}&quot;. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>Confirmar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
