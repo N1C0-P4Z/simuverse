@@ -11,12 +11,11 @@ import {
   HttpCode,
   HttpStatus,
   ForbiddenException,
-  ValidationPipe,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { PaginationDto } from '../common/dto/pagination.dto';
+import { UsersQueryDto } from './dto/users-query.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -33,12 +32,8 @@ export class UsersController {
   @Get()
   @Roles('admin')
   @Permissions('users.manage')
-  async findAll(
-    @Query(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: false, transform: true })) pagination: PaginationDto,
-    @Query('q') search?: string,
-    @Query('role') role?: string,
-  ) {
-    return this.usersService.findAll({ page: pagination.page, limit: pagination.limit, search, role });
+  async findAll(@Query() query: UsersQueryDto) {
+    return this.usersService.findAll({ page: query.page, limit: query.limit, search: query.q, role: query.role });
   }
 
   @Public()
