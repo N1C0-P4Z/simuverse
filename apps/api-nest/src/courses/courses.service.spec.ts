@@ -146,6 +146,64 @@ describe('CoursesService — association sync', () => {
     });
   });
 
+  describe('findAll() — paginated list', () => {
+    const makeCourse = (id: string) => ({
+      id,
+      course_id: id,
+      title: `Course ${id}`,
+      password_hash: 'hash',
+      teachers: [],
+      course_endorsers: [],
+      course_simulated_companies: [],
+      course_foundation_configs: [],
+      course_sponsors: [],
+    });
+
+    it('returns paginated envelope with stripPassword applied', async () => {
+      prisma.course.findMany.mockResolvedValue([makeCourse('c1')]);
+      prisma.course.count.mockResolvedValue(1);
+
+      const result = await service.findAll({ page: 1, limit: 10 });
+
+      expect(prisma.course.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 0, take: 10, orderBy: { created_at: 'desc' } }),
+      );
+      expect(result.total).toBe(1);
+      expect(result.page).toBe(1);
+      expect(result.limit).toBe(10);
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].requires_password).toBe(true);
+      expect(result.data[0].password_hash).toBeUndefined();
+    });
+
+    it('filters by isActive when provided', async () => {
+      prisma.course.findMany.mockResolvedValue([]);
+      prisma.course.count.mockResolvedValue(0);
+
+      await service.findAll({ isActive: true });
+
+      expect(prisma.course.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { is_active: true } }),
+      );
+    });
+  });
+
+  describe('findAllDropdown() — unbounded list', () => {
+    it('returns full array with stripPassword applied', async () => {
+      prisma.course.findMany.mockResolvedValue([
+        { id: 'c1', password_hash: null, teachers: [], course_endorsers: [], course_simulated_companies: [], course_foundation_configs: [], course_sponsors: [] },
+      ]);
+
+      const result = await service.findAllDropdown();
+
+      expect(prisma.course.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { created_at: 'desc' } }),
+      );
+      expect(Array.isArray(result)).toBe(true);
+      expect(result[0].requires_password).toBe(false);
+    });
+  });
+
   describe('catalog() — native Prisma pagination', () => {
     const makeCourse = (id: string, title: string, category: string) => ({
       id,

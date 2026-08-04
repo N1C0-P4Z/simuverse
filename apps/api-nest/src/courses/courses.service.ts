@@ -11,6 +11,7 @@ import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { paginate, PaginatedResult } from '../common/helpers/paginate';
 
 const ENROLL_MAX_ATTEMPTS = 5;
 const ENROLL_WINDOW_MS = 15 * 60 * 1000;
@@ -56,18 +57,35 @@ export class CoursesService {
     return out;
   }
 
-  async findAll(isActive?: boolean) {
+  private courseListInclude = {
+    teachers: {
+      include: {
+        teacher: { select: { id: true, name: true, email: true } },
+      },
+    },
+    ...COURSE_ASSOCIATIONS_INCLUDE,
+  };
+
+  async findAll(opts?: { page?: number; limit?: number; isActive?: boolean }): Promise<PaginatedResult<any>> {
+    const { page = 1, limit = 20, isActive } = opts || {};
+    const where = isActive !== undefined ? { is_active: isActive } : {};
+    const result = await paginate(this.prisma.course, where, {
+      page,
+      limit,
+      orderBy: { created_at: 'desc' },
+      include: this.courseListInclude,
+    });
+    return {
+      ...result,
+      data: result.data.map((c) => this.stripPassword(c)),
+    };
+  }
+
+  async findAllDropdown(isActive?: boolean) {
     const where = isActive !== undefined ? { is_active: isActive } : {};
     const courses = await this.prisma.course.findMany({
       where,
-      include: {
-        teachers: {
-          include: {
-            teacher: { select: { id: true, name: true, email: true } },
-          },
-        },
-        ...COURSE_ASSOCIATIONS_INCLUDE,
-      },
+      include: this.courseListInclude,
       orderBy: { created_at: 'desc' },
     });
     return courses.map((c) => this.stripPassword(c));

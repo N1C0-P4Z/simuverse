@@ -68,7 +68,7 @@ export default function MinisterioDashboard() {
     Promise.all([
       apiClient.get('/ministry/requirements'),
       apiClient.get('/ministry/kpis'),
-      apiClient.get('/courses'),
+      apiClient.get('/courses/dropdown/list'),
     ])
       .then(([r, k, c]) => {
         const reqsRaw = r.data;

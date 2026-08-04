@@ -53,7 +53,7 @@ export function TechSheetsABM() {
 
   const fetchCourses = async () => {
     try {
-      const response = await apiClient.get('/courses');
+      const response = await apiClient.get('/courses/dropdown/list');
       setCourses(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching courses:', error);

@@ -376,7 +376,7 @@ export function SimulationSessionViewer() {
   const fetchSessions = async () => {
     setLoading(true);
     try {
-      const res = await apiClient.get('/simulation-sessions');
+      const res = await apiClient.get('/simulation-sessions?limit=100&page=1');
       const raw = res.data;
       setSessions(Array.isArray(raw) ? raw : (raw?.data ?? []));
     } catch { setSessions([]); }

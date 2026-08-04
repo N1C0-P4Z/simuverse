@@ -86,7 +86,7 @@ export function DocumentsABM() {
 
   const fetchCourses = async () => {
     try {
-      const response = await apiClient.get('/courses');
+      const response = await apiClient.get('/courses/dropdown/list');
       const data = response.data;
       setCourses(Array.isArray(data) ? data : []);
     } catch (error) {

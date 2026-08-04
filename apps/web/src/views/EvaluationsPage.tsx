@@ -43,7 +43,7 @@ const EvaluationsPage = () => {
       try {
         const [simsRes, coursesRes] = await Promise.all([
           apiClient.get('/simulations'),
-          apiClient.get('/courses'),
+          apiClient.get('/courses/dropdown/list'),
         ]);
         if (simsRes.data) setSimulations(simsRes.data);
         if (coursesRes.data) setCourses(coursesRes.data);

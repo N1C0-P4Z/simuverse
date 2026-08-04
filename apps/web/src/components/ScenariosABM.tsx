@@ -164,7 +164,7 @@ export function ScenariosABM() {
 
   const loadCourses = async () => {
     try {
-      const res = await apiClient.get('/courses');
+      const res = await apiClient.get('/courses/dropdown/list');
       setCourses(Array.isArray(res.data) ? res.data : []);
     } catch { setCourses([]); }
   };

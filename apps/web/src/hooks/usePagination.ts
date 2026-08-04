@@ -14,6 +14,8 @@ export interface UsePaginationOptions {
   endpoint: string;
   limit?: number;
   extraParams?: Record<string, unknown>;
+  /** When false, skip fetching and return empty data (default true). */
+  enabled?: boolean;
 }
 
 export interface UsePaginationReturn<T> {
@@ -25,12 +27,14 @@ export interface UsePaginationReturn<T> {
   error: string | null;
   setPage: (page: number) => void;
   setExtraParams: (params: Record<string, unknown>) => void;
+  refresh: () => void;
 }
 
 export function usePagination<T>({
   endpoint,
   limit = 20,
   extraParams = {},
+  enabled = true,
 }: UsePaginationOptions): UsePaginationReturn<T> {
   const [data, setData] = useState<T[]>([]);
   const [total, setTotal] = useState(0);
@@ -67,8 +71,15 @@ export function usePagination<T>({
   );
 
   useEffect(() => {
+    if (!enabled) {
+      setData([]);
+      setTotal(0);
+      setLoading(false);
+      setError(null);
+      return;
+    }
     fetchData(page, params);
-  }, [fetchData, page, params]);
+  }, [fetchData, page, params, enabled]);
 
   const setPage = useCallback(
     (newPage: number) => {
@@ -85,5 +96,10 @@ export function usePagination<T>({
     [],
   );
 
-  return { data, total, page, totalPages, loading, error, setPage, setExtraParams };
+  const refresh = useCallback(() => {
+    if (!enabled) return;
+    fetchData(page, params);
+  }, [enabled, fetchData, page, params]);
+
+  return { data, total, page, totalPages, loading, error, setPage, setExtraParams, refresh };
 }

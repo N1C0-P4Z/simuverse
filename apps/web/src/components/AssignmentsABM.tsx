@@ -2,6 +2,8 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import { usePagination } from '@/hooks/usePagination';
 import { apiClient } from '@/services/ApiClient';
 import { Pencil, Plus, Send, Trash2 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
@@ -45,11 +47,13 @@ interface User {
 }
 
 export function AssignmentsABM() {
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const { data: assignments, total, page, totalPages, setPage, loading: assignmentsLoading } = usePagination<Assignment>({
+    endpoint: '/assignments',
+  });
   const [courses, setCourses] = useState<Course[]>([]);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dropdownLoading, setDropdownLoading] = useState(true);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
@@ -98,30 +102,13 @@ export function AssignmentsABM() {
     }
   }, [selectedCourse]);
 
-  // Fetch data
   useEffect(() => {
-    Promise.all([
-      fetchAssignments(),
-      fetchCourses(),
-      fetchStudents(),
-    ]).then(() => setLoading(false));
+    Promise.all([fetchCourses(), fetchStudents()]).then(() => setDropdownLoading(false));
   }, []);
-
-  const fetchAssignments = async () => {
-    try {
-      const response = await apiClient.get('/assignments');
-      const result = response.data;
-      const list = Array.isArray(result) ? result : (result?.data ?? []);
-      setAssignments(list);
-    } catch (error) {
-      console.error('Error fetching assignments:', error);
-      setAssignments([]);
-    }
-  };
 
   const fetchCourses = async () => {
     try {
-      const response = await apiClient.get('/courses');
+      const response = await apiClient.get('/courses/dropdown/list');
       setCourses(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching courses:', error);
@@ -174,7 +161,7 @@ export function AssignmentsABM() {
     }
 
     setSaving(false);
-    await fetchAssignments();
+    setPage(page);
 
     if (errors === 0) {
       toast.success(`✅ ${created} asignación${created !== 1 ? 'es' : ''} creada${created !== 1 ? 's' : ''} correctamente`);
@@ -216,7 +203,7 @@ export function AssignmentsABM() {
         onClick: async () => {
           try {
             await apiClient.delete(`/assignments/${id}`);
-            await fetchAssignments();
+            setPage(page);
             toast.success('Asignación eliminada');
           } catch { toast.error('Error al eliminar'); }
         },
@@ -244,7 +231,7 @@ export function AssignmentsABM() {
       });
       toast.success('Asignación actualizada');
       setEditingAssignment(null);
-      await fetchAssignments();
+      setPage(page);
     } catch {
       toast.error('Error al actualizar la asignación');
     }
@@ -260,7 +247,7 @@ export function AssignmentsABM() {
     return colors[status] || 'bg-gray-100 text-gray-900';
   };
 
-  if (loading) {
+  if (dropdownLoading) {
     return <div className="p-8 text-center">Cargando asignaciones...</div>;
   }
 
@@ -427,6 +414,10 @@ export function AssignmentsABM() {
       )}
 
       {/* Lista de asignaciones */}
+      {assignmentsLoading ? (
+        <div className="p-8 text-center text-gray-500">Cargando asignaciones...</div>
+      ) : (
+      <>
       <div className="grid grid-cols-1 gap-4">
         {assignments.map((assignment) => (
           <Card key={assignment.id} className="p-4 hover:shadow-md transition-shadow">
@@ -481,6 +472,43 @@ export function AssignmentsABM() {
         <Card className="p-8 text-center">
           <p className="text-gray-600">No hay asignaciones. Crea una nueva asignación para empezar.</p>
         </Card>
+      )}
+
+      {total > 0 && (
+        <div className="flex items-center justify-between mt-4">
+          <p className="text-sm text-gray-500">{total} resultado{total !== 1 ? 's' : ''}</p>
+          {totalPages > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => page > 1 && setPage(page - 1)}
+                    className={page <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <PaginationItem key={p}>
+                    <PaginationLink
+                      isActive={p === page}
+                      onClick={() => setPage(p)}
+                      className="cursor-pointer"
+                    >
+                      {p}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => page < totalPages && setPage(page + 1)}
+                    className={page >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
+        </div>
+      )}
+      </>
       )}
 
       {/* Edit Dialog */}

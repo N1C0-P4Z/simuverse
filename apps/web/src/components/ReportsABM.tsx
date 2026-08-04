@@ -301,7 +301,7 @@ export function ReportsABM() {
   useEffect(() => {
     Promise.all([
       apiClient.get('/evaluations/student/all').then(r => r.data).then(d => setEvaluations(Array.isArray(d) ? d : [])).catch(() => {}),
-      apiClient.get('/courses').then(r => r.data).then(d => setCourses(Array.isArray(d) ? d : [])).catch(() => {}),
+      apiClient.get('/courses/dropdown/list').then(r => r.data).then(d => setCourses(Array.isArray(d) ? d : [])).catch(() => {}),
     ]).then(() => setLoading(false));
   }, []);
 

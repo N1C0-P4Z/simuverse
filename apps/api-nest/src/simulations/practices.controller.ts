@@ -5,12 +5,14 @@ import {
   Param,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { PracticesService } from './practices.service';
 import { AssetDispatcherService } from './assets/asset-dispatcher.service';
 
@@ -23,8 +25,15 @@ export class PracticesController {
   ) {}
 
   @Get('course/:courseId')
-  async list(@Param('courseId') courseId: string) {
-    return this.practices.listByCourse(courseId);
+  async list(
+    @Param('courseId') courseId: string,
+    @Query() pagination: PaginationDto,
+  ) {
+    return this.practices.listByCoursePaginated(
+      courseId,
+      pagination.page,
+      pagination.limit,
+    );
   }
 
   @Get('course/:courseId/progress')
