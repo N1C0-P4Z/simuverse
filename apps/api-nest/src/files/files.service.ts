@@ -10,7 +10,7 @@ import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { UpdateFileDto } from './dto/file.dto';
-import { ALLOWED_EXTENSIONS } from '@simuverse/shared';
+import { ALLOWED_EXTENSIONS } from '../common/file-upload.constants';
 
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 MB
 

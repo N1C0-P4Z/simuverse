@@ -17,11 +17,7 @@
     "declaration": true,
     "incremental": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "baseUrl": ".",
-    "paths": {
-      "@simuverse/shared": ["../../shared/src/file-upload"]
-    }
+    "forceConsistentCasingInFileNames": true
   },
   "watchOptions": {
     "watchFile": "useFsEvents",
