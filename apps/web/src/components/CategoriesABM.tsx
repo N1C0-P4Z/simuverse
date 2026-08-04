@@ -13,11 +13,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Textarea } from '@/components/ui/textarea';
+import { usePagination } from '@/hooks/usePagination';
 import { useAdmin } from '@/lib/admin-context';
 import { apiClient } from '@/services/ApiClient';
 import { Edit2, EyeOff, Eye, Plus, RefreshCw, Trash2 } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { toast } from 'sonner';
 
 interface Category {
@@ -31,8 +33,10 @@ interface Category {
 
 export function CategoriesABM() {
   const { readOnly } = useAdmin();
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: categories, total, page, totalPages, setPage, loading } = usePagination<Category>({
+    endpoint: '/categories',
+  });
+  const refreshList = () => setPage(page);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
@@ -44,24 +48,6 @@ export function CategoriesABM() {
     code: '',
     description: '',
   });
-
-  // Fetch categories
-  useEffect(() => {
-    fetchCategories();
-  }, []);
-
-  const fetchCategories = async () => {
-    try {
-      const response = await apiClient.get('/categories');
-      const data = response.data;
-      setCategories(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-      setCategories([]);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,7 +70,7 @@ export function CategoriesABM() {
       setIsAddingNew(false);
 
       // Refresh list
-      await fetchCategories();
+      refreshList();
     } catch (error) {
       console.error('Error saving category:', error);
       toast.error('Error al guardar la categoría');
@@ -99,7 +85,7 @@ export function CategoriesABM() {
     if (!deletingCategory) return;
     try {
       await apiClient.delete(`/categories/${deletingCategory.id}`);
-      await fetchCategories();
+      refreshList();
       toast.success('Categoría desactivada');
     } catch (error) {
       console.error('Error deleting category:', error);
@@ -112,7 +98,7 @@ export function CategoriesABM() {
   const handleReactivate = async (id: number) => {
     try {
       await apiClient.put(`/categories/${id}/reactivate`);
-      await fetchCategories();
+      refreshList();
       toast.success('Categoría reactivada');
     } catch { toast.error('Error al reactivar'); }
   };
@@ -287,6 +273,41 @@ export function CategoriesABM() {
         </Card>
       )}
 
+      {total > 0 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-gray-500">{total} categoría{total !== 1 ? 's' : ''}</p>
+          {totalPages > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => page > 1 && setPage(page - 1)}
+                    className={page <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <PaginationItem key={p}>
+                    <PaginationLink
+                      isActive={p === page}
+                      onClick={() => setPage(p)}
+                      className="cursor-pointer"
+                    >
+                      {p}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => page < totalPages && setPage(page + 1)}
+                    className={page >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
+        </div>
+      )}
+
       {/* Soft-delete confirmation */}
       <AlertDialog open={!!deletingCategory} onOpenChange={o => { if (!o) setDeletingCategory(null); }}>
         <AlertDialogContent>
@@ -321,7 +342,7 @@ export function CategoriesABM() {
                   await apiClient.delete(`/categories/${hardDeleteCategory.id}/hard`);
                   toast.success('Categoría eliminada permanentemente');
                   setHardDeleteCategory(null);
-                  fetchCategories();
+                  refreshList();
                 } catch { toast.error('Error al eliminar'); }
               }}>
               Sí, eliminar permanentemente

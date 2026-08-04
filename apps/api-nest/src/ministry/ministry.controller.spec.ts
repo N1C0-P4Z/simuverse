@@ -35,3 +35,56 @@ describe('MinistryController — RBAC Phase A', () => {
     });
   });
 });
+
+describe('MinistryController — Pagination', () => {
+  let controller: MinistryController;
+  let mockService: Record<string, jest.Mock>;
+
+  beforeEach(async () => {
+    mockService = {
+      listRequirements: jest.fn(),
+      listKpis: jest.fn(),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [MinistryController],
+      providers: [
+        { provide: MinistryService, useValue: mockService },
+        { provide: RbacService, useValue: {} },
+      ],
+    }).compile();
+
+    controller = module.get(MinistryController);
+  });
+
+  it('passes pagination to listRequirements', async () => {
+    const expected = { data: [{ id: 'r1' }], total: 1, page: 1, limit: 10 };
+    mockService.listRequirements.mockResolvedValue(expected);
+
+    const result = await controller.listRequirements('course-1', 'active', { page: 1, limit: 10 });
+
+    expect(mockService.listRequirements).toHaveBeenCalledWith({
+      course_id: 'course-1',
+      status: 'active',
+      page: 1,
+      limit: 10,
+    });
+    expect(result).toEqual(expected);
+  });
+
+  it('passes pagination to listKpis', async () => {
+    const expected = { data: [{ id: 'k1' }], total: 1, page: 2, limit: 5 };
+    mockService.listKpis.mockResolvedValue(expected);
+
+    const result = await controller.listKpis('course-1', 'req-1', 'true', { page: 2, limit: 5 });
+
+    expect(mockService.listKpis).toHaveBeenCalledWith({
+      course_id: 'course-1',
+      ministry_requirement_id: 'req-1',
+      active: 'true',
+      page: 2,
+      limit: 5,
+    });
+    expect(result).toEqual(expected);
+  });
+});

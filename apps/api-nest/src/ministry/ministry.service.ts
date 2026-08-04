@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { paginate, PaginatedResult } from '../common/helpers/paginate';
 import { AIService } from '../simulations/ai/ai.service';
 import {
   CreateMinistryRequirementDto,
@@ -23,17 +24,24 @@ export class MinistryService {
 
   // ── Ministry Requirements ──────────────────────────────────────────
 
-  async listRequirements(params: { course_id?: string; status?: string }) {
+  async listRequirements(params: {
+    course_id?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<PaginatedResult<any>> {
+    const { page = 1, limit = 20, ...filters } = params;
     const where: any = {};
-    if (params.course_id) where.course_id = params.course_id;
-    if (params.status) where.status = params.status;
+    if (filters.course_id) where.course_id = filters.course_id;
+    if (filters.status) where.status = filters.status;
 
-    const requirements = await this.prisma.ministryRequirement.findMany({
-      where,
+    const result = await paginate(this.prisma.ministryRequirement, where, {
+      page,
+      limit,
       orderBy: { created_at: 'desc' },
     });
 
-    return this.serialize(requirements);
+    return { ...result, data: this.serialize(result.data) };
   }
 
   async getRequirement(id: string) {
@@ -221,18 +229,26 @@ Document text: ${requirement.raw_text || 'No text available'}`;
 
   // ── KPIs ────────────────────────────────────────────────────────────
 
-  async listKpis(params: { course_id?: string; ministry_requirement_id?: string; active?: string }) {
+  async listKpis(params: {
+    course_id?: string;
+    ministry_requirement_id?: string;
+    active?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<PaginatedResult<any>> {
+    const { page = 1, limit = 20, ...filters } = params;
     const where: any = {};
-    if (params.course_id) where.course_id = params.course_id;
-    if (params.ministry_requirement_id) where.ministry_requirement_id = params.ministry_requirement_id;
-    if (params.active !== undefined) where.is_active = params.active === 'true';
+    if (filters.course_id) where.course_id = filters.course_id;
+    if (filters.ministry_requirement_id) where.ministry_requirement_id = filters.ministry_requirement_id;
+    if (filters.active !== undefined) where.is_active = filters.active === 'true';
 
-    const kpis = await this.prisma.kPI.findMany({
-      where,
+    const result = await paginate(this.prisma.kPI, where, {
+      page,
+      limit,
       orderBy: { created_at: 'desc' },
     });
 
-    return this.serialize(kpis);
+    return { ...result, data: this.serialize(result.data) };
   }
 
   async getKpi(id: string) {

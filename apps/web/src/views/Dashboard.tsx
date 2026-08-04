@@ -106,9 +106,10 @@ const Dashboard = () => {
       // refresh assignments
       if (user) {
         const assignRes = await apiClient.get(`/assignments?student_id=${user.id}`);
-        const assignList: Assignment[] = assignRes.data || [];
+        const assignRaw = assignRes.data;
+        const assignList: Assignment[] = Array.isArray(assignRaw) ? assignRaw : (assignRaw?.data ?? []);
         setAssignments(assignList);
-        const coursesRes = await apiClient.get('/courses');
+        const coursesRes = await apiClient.get('/courses/dropdown/list');
         const allCourses: Course[] = coursesRes.data || [];
         const assignedCourseIds = new Set(assignList.map((a: Assignment) => a.course_id));
         setCourses(allCourses.filter((c) => assignedCourseIds.has(c.id)));
@@ -133,7 +134,7 @@ const Dashboard = () => {
       try {
         // Admin, docentes y ministerio ven todos los cursos directamente
         if (hasRole('admin') || hasRole('teacher') || hasRole('ministerio') || hasRole('supervisor')) {
-          const response = await apiClient.get('/courses');
+          const response = await apiClient.get('/courses/dropdown/list');
           setCourses(response.data);
           setAssignmentsLoaded(true);
           return;
@@ -141,8 +142,11 @@ const Dashboard = () => {
 
         // Para alumnos: verificar asignaciones primero
         const [assignRes, coursesRes] = await Promise.all([
-          apiClient.get(`/assignments?student_id=${user.id}`).then(r => r.data),
-          apiClient.get('/courses'),
+          apiClient.get(`/assignments?student_id=${user.id}`).then(r => {
+            const raw = r.data;
+            return Array.isArray(raw) ? raw : (raw?.data ?? []);
+          }),
+          apiClient.get('/courses/dropdown/list'),
         ]);
 
         const assignList: Assignment[] = assignRes || [];

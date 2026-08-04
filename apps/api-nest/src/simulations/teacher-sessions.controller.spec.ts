@@ -19,6 +19,7 @@ describe('TeacherSessionsController', () => {
       simulationInstance: {
         findMany: jest.fn(),
         findUnique: jest.fn(),
+        count: jest.fn(),
       },
       simulationChatLog: {
         count: jest.fn(),
@@ -42,12 +43,12 @@ describe('TeacherSessionsController', () => {
   });
 
   describe('list', () => {
-    it('returns empty array when teacher has no students in TeacherGroup', async () => {
+    it('returns empty envelope when teacher has no students in TeacherGroup', async () => {
       prismaMock.teacherGroup.findMany.mockResolvedValue([]);
 
       const result = await controller.list(teacherUser);
 
-      expect(result).toEqual([]);
+      expect(result).toEqual({ data: [], total: 0, page: 1, limit: 20 });
       expect(prismaMock.simulationInstance.findMany).not.toHaveBeenCalled();
     });
 
@@ -57,6 +58,7 @@ describe('TeacherSessionsController', () => {
         { student_id: 'student-b' },
       ]);
       prismaMock.simulationInstance.findMany.mockResolvedValue([]);
+      prismaMock.simulationInstance.count.mockResolvedValue(0);
       prismaMock.simulationChatLog.count.mockResolvedValue(0);
 
       await controller.list(teacherUser, 'course-1');
@@ -105,6 +107,7 @@ describe('TeacherSessionsController', () => {
           },
         },
       ]);
+      prismaMock.simulationInstance.count.mockResolvedValue(1);
       prismaMock.simulationChatLog.count.mockResolvedValue(5);
 
       const result = await controller.list(adminUser, 'course-1', 'student-a');
@@ -115,13 +118,15 @@ describe('TeacherSessionsController', () => {
           where: { course_id: 'course-1', student_id: 'student-a', student: { role: 'student' } },
         }),
       );
-      expect(result).toHaveLength(1);
-      expect(result[0]).toMatchObject({
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0]).toMatchObject({
         id: 'inst-1',
         agent_key: 'agent-practice-1',
         total_turns: 5,
         student_name: 'Ana',
       });
+      expect(result.total).toBe(1);
+      expect(result.page).toBe(1);
     });
   });
 

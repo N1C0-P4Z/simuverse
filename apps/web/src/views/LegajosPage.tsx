@@ -8,9 +8,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuth } from '@/hooks/useAuth';
+import { usePagination } from '@/hooks/usePagination';
 import {
     AlertCircle, BarChart3,
     ChevronRight,
@@ -22,8 +24,8 @@ import {
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-import { apiClient } from '@/services/ApiClient';
 import { getScoreBarColor, getScoreText } from '@/lib/score-colors';
+import { apiClient } from '@/services/ApiClient';
 
 interface StudentSummary {
   id: string;
@@ -42,9 +44,9 @@ interface StudentSummary {
 const LegajosPage = () => {
   const { user, loading, hasRole } = useAuth();
   const router = useRouter();
-  const [students, setStudents] = useState<StudentSummary[]>([]);
-  const [fetching, setFetching] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: students, total, page, totalPages, setPage, setExtraParams, loading: fetching, error } = usePagination<StudentSummary>({
+    endpoint: '/legajo/students',
+  });
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'activity' | 'score'>('activity');
   const [courseFilter, setCourseFilter] = useState('');
@@ -58,54 +60,43 @@ const LegajosPage = () => {
     }
   }, [user, loading, hasRole, router]);
 
+  // Server-side filters via debounced setExtraParams
   useEffect(() => {
-    if (!user) return;
-    const params = new URLSearchParams();
-    if (courseFilter) params.set('course_id', courseFilter);
-    if (teacherFilter) params.set('teacher_id', teacherFilter);
-    const qs = params.toString();
-    apiClient.get(`/legajo/students${qs ? `?${qs}` : ''}`)
-      .then(r => r.data)
-      .then(data => {
-        if (Array.isArray(data)) setStudents(data);
-        else if (data.error) setError(data.error);
-        setFetching(false);
-      })
-      .catch(err => {
-        setError(err.message || 'Error al cargar alumnos');
-        setFetching(false);
-      });
-  }, [user, courseFilter, teacherFilter]);
+    const timer = setTimeout(() => {
+      const params: Record<string, unknown> = {};
+      if (search) params.search = search;
+      if (courseFilter) params.course_id = courseFilter;
+      if (teacherFilter) params.teacher_id = teacherFilter;
+      setExtraParams(params);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search, courseFilter, teacherFilter, setExtraParams]);
 
   // Fetch courses and teachers for filter dropdowns
   useEffect(() => {
     if (!user) return;
-    apiClient.get('/courses').then(r => {
+    apiClient.get('/courses/dropdown/list').then(r => {
       const list = Array.isArray(r.data) ? r.data : [];
       setCourses(list.map((c: any) => ({ id: c.id, title: c.title })));
     }).catch(() => {});
     apiClient.get('/users', { params: { role: 'teacher' } }).then(r => {
-      const list = Array.isArray(r.data) ? r.data : [];
+      const raw = r.data?.data ?? r.data;
+      const list = Array.isArray(raw) ? raw : [];
       setTeachers(list.map((t: any) => ({ id: t.id, name: t.name })));
     }).catch(() => {});
   }, [user]);
 
   const n = (v: string | number | null) => (v === null || v === undefined ? 0 : Number(v));
 
-  const filtered = students
-    .filter(s =>
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.email.toLowerCase().includes(search.toLowerCase())
-    )
-    .sort((a, b) => {
-      if (sortBy === 'name') return a.name.localeCompare(b.name);
-      if (sortBy === 'score') return n(b.avg_score) - n(a.avg_score);
-      // activity: most recent first
-      if (!a.last_activity && !b.last_activity) return 0;
-      if (!a.last_activity) return 1;
-      if (!b.last_activity) return -1;
-      return new Date(b.last_activity).getTime() - new Date(a.last_activity).getTime();
-    });
+  // Client-side sort on current page only (server handles search/filtering)
+  const sorted = [...students].sort((a, b) => {
+    if (sortBy === 'name') return a.name.localeCompare(b.name);
+    if (sortBy === 'score') return n(b.avg_score) - n(a.avg_score);
+    if (!a.last_activity && !b.last_activity) return 0;
+    if (!a.last_activity) return 1;
+    if (!b.last_activity) return -1;
+    return new Date(b.last_activity).getTime() - new Date(a.last_activity).getTime();
+  });
 
   const scoreColor = (v: number | null) =>
     v === null ? '' : getScoreText(v);
@@ -145,7 +136,7 @@ const LegajosPage = () => {
         <div className="mb-6">
           <h1 className="text-2xl font-bold">Legajos de Alumnos</h1>
           <p className="text-muted-foreground text-sm">
-            {students.length} alumno{students.length !== 1 ? 's' : ''} registrado{students.length !== 1 ? 's' : ''}
+            {total} alumno{total !== 1 ? 's' : ''} registrado{total !== 1 ? 's' : ''}
           </p>
         </div>
         {/* Filtros */}
@@ -189,21 +180,22 @@ const LegajosPage = () => {
           </Select>
           {search && (
             <Badge variant="outline" className="shrink-0">
-              {filtered.length} resultado{filtered.length !== 1 ? 's' : ''}
+              {total} resultado{total !== 1 ? 's' : ''}
             </Badge>
           )}
         </div>
 
-        {/* Summary bar */}
+        {/* Summary bar — total uses server count; other stats are page-scoped */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
           {[
             {
               label: 'Alumnos totales',
-              value: students.length,
+              value: total,
               icon: GraduationCap,
               color: 'text-blue-600',
             },
             {
+              // Page-scoped: full counts would require a separate aggregate endpoint
               label: 'Con simulaciones',
               value: students.filter(s => n(s.total_simulations) > 0).length,
               icon: BarChart3,
@@ -229,7 +221,7 @@ const LegajosPage = () => {
         </div>
 
         {/* Student grid */}
-        {filtered.length === 0 ? (
+        {sorted.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
             <GraduationCap className="w-12 h-12 mx-auto mb-4 opacity-40" />
             <p className="text-lg font-medium">
@@ -251,7 +243,7 @@ const LegajosPage = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map(student => {
+                {sorted.map(student => {
                   const sims = n(student.total_simulations);
                   const evals = n(student.total_evaluations);
                   const avg = student.avg_score !== null ? n(student.avg_score) : null;
@@ -305,6 +297,41 @@ const LegajosPage = () => {
                 })}
               </TableBody>
             </Table>
+          </div>
+        )}
+
+        {total > 0 && (
+          <div className="flex items-center justify-between mt-6">
+            <p className="text-sm text-muted-foreground">{total} alumno{total !== 1 ? 's' : ''}</p>
+            {totalPages > 1 && (
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={() => page > 1 && setPage(page - 1)}
+                      className={page <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                    />
+                  </PaginationItem>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                    <PaginationItem key={p}>
+                      <PaginationLink
+                        isActive={p === page}
+                        onClick={() => setPage(p)}
+                        className="cursor-pointer"
+                      >
+                        {p}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ))}
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={() => page < totalPages && setPage(page + 1)}
+                      className={page >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            )}
           </div>
         )}
 

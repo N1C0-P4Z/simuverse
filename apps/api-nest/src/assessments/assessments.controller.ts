@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { AssessmentsService } from './assessments.service';
 import { CreateAssessmentDto } from './dto/create-assessment.dto';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
@@ -28,6 +29,7 @@ export class AssessmentsController {
     @Query('course_id') courseId?: string,
     @Query('user_id') userId?: string,
     @CurrentUser() user?: any,
+    @Query() pagination?: PaginationDto,
   ) {
     let resolvedUserId = userId;
     if (user?.role === 'student') {
@@ -36,6 +38,8 @@ export class AssessmentsController {
     return this.assessmentsService.findAll({
       course_id: courseId,
       user_id: resolvedUserId,
+      page: pagination?.page,
+      limit: pagination?.limit,
     });
   }
 

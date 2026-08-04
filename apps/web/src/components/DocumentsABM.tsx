@@ -2,10 +2,12 @@
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { API_BASE, authFetch } from '@/lib/api';
 import { useAdmin } from '@/lib/admin-context';
 import { apiClient } from '@/services/ApiClient';
+import { usePagination } from '@/hooks/usePagination';
 import { ExternalLink, FileText, Paperclip, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -55,9 +57,10 @@ const emptyForm = {
 
 export function DocumentsABM() {
   const { readOnly } = useAdmin();
-  const [documents, setDocuments] = useState<Document[]>([]);
+  const { data: documents, total, page, totalPages, setPage, setExtraParams, loading } = usePagination<Document>({
+    endpoint: '/documents',
+  });
   const [courses, setCourses] = useState<Course[]>([]);
-  const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -67,31 +70,21 @@ export function DocumentsABM() {
   const [courseFilter, setCourseFilter] = useState('');
 
   useEffect(() => {
-    fetchDocuments();
     fetchCourses();
   }, []);
 
+  const refreshList = () => setPage(page);
+
   useEffect(() => {
-    fetchDocuments(courseFilter);
+    const params: Record<string, unknown> = {};
+    if (courseFilter) params.course_id = courseFilter;
+    setExtraParams(params);
   }, [courseFilter]);
 
-  const fetchDocuments = async (courseId?: string) => {
-    try {
-      const params = courseId ? { course_id: courseId } : undefined;
-      const response = await apiClient.get('/documents', { params });
-      const data = response.data;
-      setDocuments(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Error fetching documents:', error);
-      setDocuments([]);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const fetchCourses = async () => {
     try {
-      const response = await apiClient.get('/courses');
+      const response = await apiClient.get('/courses/dropdown/list');
       const data = response.data;
       setCourses(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -245,7 +238,7 @@ export function DocumentsABM() {
       }
 
       resetForm();
-      await fetchDocuments();
+      refreshList();
     } catch (error) {
       console.error('Error saving document:', error);
       toast.error(error instanceof Error ? error.message : 'Error al guardar el documento');
@@ -262,7 +255,7 @@ export function DocumentsABM() {
           try {
             await apiClient.delete(`/documents/${id}`);
             if (editingId === id) resetForm();
-            await fetchDocuments();
+            refreshList();
             toast.success('Documento eliminado');
           } catch (error) {
             console.error('Error deleting document:', error);
@@ -277,7 +270,7 @@ export function DocumentsABM() {
   const handleReactivate = async (id: number) => {
     try {
       await apiClient.put(`/documents/${id}/reactivate`);
-      await fetchDocuments();
+      refreshList();
       toast.success('Documento reactivado');
     } catch { toast.error('Error al reactivar'); }
   };
@@ -516,6 +509,42 @@ export function DocumentsABM() {
         <Card className="p-8 text-center">
           <p className="text-gray-600">No hay documentos. Subí un archivo o agregá un enlace para empezar.</p>
         </Card>
+      )}
+
+      {/* Pagination */}
+      {total > 0 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-gray-500">{total} documento{total !== 1 ? 's' : ''}</p>
+          {totalPages > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => page > 1 && setPage(page - 1)}
+                    className={page <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <PaginationItem key={p}>
+                    <PaginationLink
+                      isActive={p === page}
+                      onClick={() => setPage(p)}
+                      className="cursor-pointer"
+                    >
+                      {p}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => page < totalPages && setPage(page + 1)}
+                    className={page >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
+        </div>
       )}
     </div>
   );

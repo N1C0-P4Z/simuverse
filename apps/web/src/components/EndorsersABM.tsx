@@ -8,12 +8,14 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { LogoField, useFilePreview } from '@/components/ui/logo-field';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { ClipboardList, Globe, Handshake, Landmark, Plus, RotateCw, Scale, Settings, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { useAdmin } from '@/lib/admin-context';
 import { apiClient } from '@/services/ApiClient';
+import { usePagination } from '@/hooks/usePagination';
 
 interface Endorser {
   id: number;
@@ -76,24 +78,15 @@ function LogoDisplay({ name, logoUrl, size = 'md' }: { name: string; logoUrl?: s
 
 export function EndorsersABM() {
   const { readOnly } = useAdmin();
-  const [endorsers, setEndorsers] = useState<Endorser[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: endorsers, total, page, totalPages, setPage, loading, error } = usePagination<Endorser>({
+    endpoint: '/endorsers',
+  });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const filePreviewUrl = useFilePreview(logoFile);
-
-  const fetchAll = async () => {
-    try {
-      const eRes = await apiClient.get('/endorsers').then(r => r.data);
-      setEndorsers(Array.isArray(eRes) ? eRes : []);
-    } catch { setEndorsers([]); }
-    setLoading(false);
-  };
-
-  useEffect(() => { fetchAll(); }, []);
 
   const buildPayload = (): FormData | typeof form => {
     if (!logoFile) return form;
@@ -121,7 +114,7 @@ export function EndorsersABM() {
       setForm(emptyForm());
       setLogoFile(null);
       setEditingId(null);
-      fetchAll();
+      setPage(page); // trigger re-fetch
     } catch (e: any) { toast.error(e.message); }
     setSaving(false);
   };
@@ -141,7 +134,7 @@ export function EndorsersABM() {
           try {
             await apiClient.delete(`/endorsers/${id}`);
             toast.success('Auspiciante desactivado');
-            fetchAll();
+            setPage(page); // trigger re-fetch
           } catch { toast.error('Error al desactivar'); }
         },
       },
@@ -152,12 +145,13 @@ export function EndorsersABM() {
   const handleReactivate = async (id: number) => {
     try {
       await apiClient.put(`/endorsers/${id}/reactivate`);
-      fetchAll();
+      setPage(page); // trigger re-fetch
       toast.success('Auspiciante reactivado');
     } catch { toast.error('Error al reactivar'); }
   };
 
   if (loading) return <div className="p-8 text-center text-muted-foreground">Cargando...</div>;
+  if (error) return <div className="p-8 text-center text-red-500">Error: {error}</div>;
 
   return (
     <div className="space-y-8">
@@ -259,10 +253,45 @@ export function EndorsersABM() {
         ))}
       </div>
 
-      {endorsers.length === 0 && (
+      {total === 0 && (
         <div className="text-center py-10 text-muted-foreground">
           <Handshake className="w-10 h-10 mx-auto mb-3 opacity-50" />
           <p>No hay auspiciantes. Agregá el primero.</p>
+        </div>
+      )}
+
+      {total > 0 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-gray-500">{total} avalador{total !== 1 ? 'es' : ''}</p>
+          {totalPages > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => page > 1 && setPage(page - 1)}
+                    className={page <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <PaginationItem key={p}>
+                    <PaginationLink
+                      isActive={p === page}
+                      onClick={() => setPage(p)}
+                      className="cursor-pointer"
+                    >
+                      {p}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => page < totalPages && setPage(page + 1)}
+                    className={page >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
         </div>
       )}
     </div>

@@ -3,7 +3,16 @@
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 import { Textarea } from '@/components/ui/textarea';
+import { usePagination } from '@/hooks/usePagination';
 import { apiClient } from '@/services/ApiClient';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -34,8 +43,18 @@ const DIFFICULTIES = [
 export function PracticesABM() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [courseId, setCourseId] = useState('');
-  const [practices, setPractices] = useState<Practice[]>([]);
-  const [loading, setLoading] = useState(false);
+  const {
+    data: practices,
+    total,
+    page,
+    totalPages,
+    setPage,
+    loading,
+    refresh,
+  } = usePagination<Practice>({
+    endpoint: `/practices/course/${courseId}`,
+    enabled: Boolean(courseId),
+  });
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({
     title: '',
@@ -50,29 +69,12 @@ export function PracticesABM() {
   });
 
   useEffect(() => {
-    apiClient.get('/courses').then((r) => {
+    apiClient.get('/courses/dropdown/list').then((r) => {
       const data = Array.isArray(r.data) ? r.data : [];
       setCourses(data);
       if (data[0]) setCourseId(data[0].id);
     });
   }, []);
-
-  const load = async (cid: string) => {
-    if (!cid) return;
-    setLoading(true);
-    try {
-      const r = await apiClient.get(`/practices/course/${cid}`);
-      setPractices(Array.isArray(r.data) ? r.data : []);
-    } catch {
-      setPractices([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    load(courseId);
-  }, [courseId]);
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,7 +87,7 @@ export function PracticesABM() {
       toast.success('Práctica creada');
       setForm({ title: '', description: '', difficulty: 'medium' });
       setAdding(false);
-      await load(courseId);
+      refresh();
     } catch {
       toast.error('No se pudo crear la práctica');
     }
@@ -95,7 +97,7 @@ export function PracticesABM() {
     try {
       await apiClient.put(`/practices/${id}`, { is_active: false });
       toast.success('Práctica desactivada');
-      await load(courseId);
+      refresh();
     } catch {
       toast.error('Error al desactivar');
     }
@@ -120,7 +122,7 @@ export function PracticesABM() {
       await apiClient.put(`/practices/${editMode}`, editForm);
       toast.success('Práctica actualizada');
       setEditMode(null);
-      await load(courseId);
+      refresh();
     } catch {
       toast.error('No se pudo actualizar la práctica');
     }
@@ -139,7 +141,10 @@ export function PracticesABM() {
           <select
             className="border rounded-md p-2"
             value={courseId}
-            onChange={(e) => setCourseId(e.target.value)}
+            onChange={(e) => {
+              setCourseId(e.target.value);
+              setPage(1);
+            }}
           >
             {courses.map((c) => (
               <option key={c.id} value={c.id}>
@@ -278,10 +283,47 @@ export function PracticesABM() {
               )}
             </Card>
           ))}
-          {practices.length === 0 && (
+          {total === 0 && (
             <Card className="p-6 text-center text-muted-foreground">
               No hay prácticas. Creá la primera (practica-1).
             </Card>
+          )}
+
+          {total > 0 && (
+            <div className="flex items-center justify-between pt-2">
+              <p className="text-sm text-gray-500">
+                {total} práctica{total !== 1 ? 's' : ''}
+              </p>
+              {totalPages > 1 && (
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        onClick={() => page > 1 && setPage(page - 1)}
+                        className={page <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                      <PaginationItem key={p}>
+                        <PaginationLink
+                          isActive={p === page}
+                          onClick={() => setPage(p)}
+                          className="cursor-pointer"
+                        >
+                          {p}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext
+                        onClick={() => page < totalPages && setPage(page + 1)}
+                        className={page >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              )}
+            </div>
           )}
         </div>
       )}

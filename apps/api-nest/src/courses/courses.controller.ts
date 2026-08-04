@@ -20,6 +20,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { Permissions } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
+import { PaginationDto } from '../common/dto/pagination.dto';
 
 class CreateCourseDto {
   @IsString()
@@ -185,9 +186,22 @@ export class CoursesController {
   constructor(private coursesService: CoursesService) {}
 
   @Get()
-  async findAll(@Query('is_active') isActive?: string) {
+  async findAll(
+    @Query() pagination: PaginationDto,
+    @Query('is_active') isActive?: string,
+  ) {
     const active = isActive !== undefined ? isActive === 'true' : undefined;
-    return this.coursesService.findAll(active);
+    return this.coursesService.findAll({
+      page: pagination.page,
+      limit: pagination.limit,
+      isActive: active,
+    });
+  }
+
+  @Get('dropdown/list')
+  async findAllDropdown(@Query('is_active') isActive?: string) {
+    const active = isActive !== undefined ? isActive === 'true' : undefined;
+    return this.coursesService.findAllDropdown(active);
   }
 
   @Get('catalog')
