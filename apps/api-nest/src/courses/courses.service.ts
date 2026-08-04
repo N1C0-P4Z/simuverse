@@ -568,6 +568,261 @@ export class CoursesService {
     });
   }
 
+  async getLanding(courseId: string, userId: string) {
+    const include = {
+      teachers: {
+        include: {
+          teacher: { select: { id: true, name: true, email: true } },
+        },
+      },
+      course_sponsors: { include: { sponsor: true } },
+      course_endorsers: { include: { endorser: true } },
+    };
+
+    let course = await this.prisma.course.findUnique({ where: { id: courseId }, include });
+    if (!course) {
+      course = await this.prisma.course.findUnique({ where: { course_id: courseId }, include });
+    }
+    if (!course) {
+      throw new NotFoundException('Course not found');
+    }
+
+    const assignment = await this.prisma.simulationAssignment.findFirst({
+      where: { student_id: userId, course_id: course.id },
+    });
+
+    const sheet = await this.resolveLandingTechSheet(course);
+    const tech_sheet = sheet ? await this.buildLandingTechSheet(sheet) : null;
+
+    const cats = Array.isArray(course.categories) ? (course.categories as string[]) : [];
+    const tags = [course.category, ...cats].filter(Boolean).map((t) => String(t));
+
+    return {
+      id: course.id,
+      course_id: course.course_id,
+      title: course.title,
+      description: course.description,
+      category: course.category,
+      tags,
+      requires_password: !!course.password_hash,
+      is_enrolled: !!assignment,
+      teachers: course.teachers.map((t) => ({
+        id: t.teacher.id,
+        name: t.teacher.name,
+        email: t.teacher.email,
+      })),
+      sponsors: course.course_sponsors
+        .map((cs) => cs.sponsor)
+        .filter((s) => s && s.is_active)
+        .map((s) => ({
+          id: s.id,
+          name: s.name,
+          logo_url: s.logo_url,
+          website: s.website,
+        })),
+      endorsers: course.course_endorsers
+        .map((ce) => ce.endorser)
+        .filter((e) => e && e.is_active)
+        .map((e) => ({
+          id: e.id,
+          name: e.name,
+          short_name: e.short_name,
+          logo_url: e.logo_url,
+          website: e.website,
+        })),
+      tech_sheet,
+    };
+  }
+
+  private async resolveLandingTechSheet(course: { id: string; tech_sheet_id?: number | null }) {
+    if (course.tech_sheet_id) {
+      const linked = await this.prisma.techSheet.findUnique({
+        where: { id: course.tech_sheet_id },
+      });
+      if (linked) return linked;
+    }
+    return this.prisma.techSheet.findFirst({ where: { course_id: course.id } });
+  }
+
+  private async buildLandingTechSheet(sheet: {
+    id: number;
+    name: string;
+    extracted_data?: unknown;
+    pipeline_output?: unknown;
+    pipeline_status?: string | null;
+    processed?: boolean;
+  }) {
+    const compCount = await (this.prisma as any).techSheetCompetency.count({
+      where: { tech_sheet_id: sheet.id },
+    });
+    const extractedData = sheet.extracted_data as Record<string, any> | null;
+    const analyzedConfig = extractedData?.analyzed_config;
+
+    if (compCount === 0 && !analyzedConfig) {
+      return null;
+    }
+
+    let competencies: Array<{ name: string; description: string | null; level: string }> = [];
+    let tasks: Array<{
+      title: string;
+      description: string | null;
+      difficulty: string;
+      sequence: number;
+      expected_duration_minutes: number;
+    }> = [];
+
+    if (compCount > 0) {
+      const compRows = await (this.prisma as any).techSheetCompetency.findMany({
+        where: { tech_sheet_id: sheet.id },
+        orderBy: { created_at: 'asc' },
+      });
+      competencies = compRows.map((c: any) => ({
+        name: c.name,
+        description: c.description,
+        level: c.level,
+      }));
+
+      const taskRows = await (this.prisma as any).techSheetTask.findMany({
+        where: { tech_sheet_id: sheet.id },
+        orderBy: { sequence: 'asc' },
+      });
+      tasks = taskRows.map((t: any) => ({
+        title: t.title,
+        description: t.description,
+        difficulty: t.difficulty,
+        sequence: t.sequence,
+        expected_duration_minutes: t.expected_duration_minutes,
+      }));
+    } else if (analyzedConfig) {
+      competencies = this.parseLandingCompetencies(analyzedConfig.competencies);
+      tasks = this.parseLandingTasks(analyzedConfig.questions);
+    }
+
+    const po = (sheet.pipeline_output || {}) as Record<string, any>;
+    const content = {
+      emails: po.step_8_emails ?? [],
+      spreadsheet: po.step_9_spreadsheet ?? null,
+      crisis: po.step_10_crisis ?? [],
+    };
+
+    const hasContent =
+      content.emails.length > 0 ||
+      content.spreadsheet != null ||
+      content.crisis.length > 0;
+
+    const analyzed =
+      competencies.length > 0 ||
+      tasks.length > 0 ||
+      hasContent ||
+      sheet.pipeline_status === 'completed' ||
+      sheet.processed === true;
+
+    return {
+      id: sheet.id,
+      name: sheet.name,
+      analyzed,
+      competencies,
+      tasks,
+      content,
+    };
+  }
+
+  private parseLandingCompetencies(raw: unknown): Array<{
+    name: string;
+    description: string;
+    level: string;
+  }> {
+    const parsed = this.safeParseLandingJson(raw);
+    if (!parsed) return [];
+
+    const items = Array.isArray(parsed)
+      ? parsed
+      : parsed.competencias || parsed.competencies || [];
+    if (!Array.isArray(items)) return [];
+
+    return items.map((c: any) => ({
+      name: c.nombre || c.name || '',
+      description: c.descripcion || c.description || '',
+      level: this.mapLandingLevel(c.nivel || c.level),
+    }));
+  }
+
+  private parseLandingTasks(raw: unknown): Array<{
+    title: string;
+    description: string;
+    difficulty: string;
+    sequence: number;
+    expected_duration_minutes: number;
+  }> {
+    const parsed = this.safeParseLandingJson(raw);
+    if (!parsed) return [];
+
+    const items = Array.isArray(parsed)
+      ? parsed
+      : parsed.preguntas || parsed.questions || [];
+    if (!Array.isArray(items)) return [];
+
+    return items.map((q: any, i: number) => ({
+      title: q.texto || q.text || q.titulo || '',
+      description: q.descripcion || q.description || '',
+      difficulty: this.mapLandingDifficulty(q.dificultad || q.difficulty),
+      sequence: i + 1,
+      expected_duration_minutes: 0,
+    }));
+  }
+
+  private safeParseLandingJson(value: unknown): any {
+    if (!value) return null;
+    if (typeof value === 'string') {
+      let cleaned = value.trim();
+      cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, '');
+      cleaned = cleaned.replace(/\n?\s*```$/, '');
+      try {
+        return JSON.parse(cleaned);
+      } catch {
+        return null;
+      }
+    }
+    return value;
+  }
+
+  private mapLandingLevel(raw: string): string {
+    const map: Record<string, string> = {
+      basico: 'basic',
+      basica: 'basic',
+      intermedio: 'intermediate',
+      intermedia: 'intermediate',
+      avanzado: 'advanced',
+      avanzada: 'advanced',
+      basic: 'basic',
+      intermediate: 'intermediate',
+      advanced: 'advanced',
+    };
+    return map[String(raw).toLowerCase()] || 'basic';
+  }
+
+  private mapLandingDifficulty(raw: string): string {
+    const key = String(raw || '').toLowerCase().trim();
+    const map: Record<string, string> = {
+      basica: 'very_low',
+      basico: 'very_low',
+      easy: 'very_low',
+      very_low: 'very_low',
+      very_easy: 'very_low',
+      'muy baja': 'very_low',
+      intermedia: 'low',
+      intermedio: 'low',
+      low: 'low',
+      baja: 'low',
+      avanzada: 'medium',
+      avanzado: 'medium',
+      medium: 'medium',
+      media: 'medium',
+      hard: 'medium',
+    };
+    return map[key] || 'very_low';
+  }
+
   async findCourseSponsors(courseId: string) {
     const course = await this.prisma.course.findUnique({
       where: { id: courseId },

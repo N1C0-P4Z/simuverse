@@ -219,6 +219,15 @@ export class CoursesController {
     });
   }
 
+  @Get(':courseId/landing')
+  @Roles('student', 'admin', 'teacher')
+  async getLanding(
+    @Param('courseId') courseId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.coursesService.getLanding(courseId, userId);
+  }
+
   @Get(':courseId')
   async findOne(@Param('courseId') courseId: string) {
     return this.coursesService.findById(courseId);
