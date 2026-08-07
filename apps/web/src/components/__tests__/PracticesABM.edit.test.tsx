@@ -53,17 +53,27 @@ const MOCK_PRACTICES = [
   },
 ];
 
+function mockCoursesAndPractices(practices = MOCK_PRACTICES) {
+  mockGet.mockImplementation((url: string) => {
+    if (url === '/courses/dropdown/list' || url === '/courses') {
+      return Promise.resolve({ data: MOCK_COURSES });
+    }
+    if (url.startsWith('/practices/course/')) {
+      return Promise.resolve({
+        data: { data: practices, total: practices.length, page: 1, limit: 20 },
+      });
+    }
+    return Promise.resolve({ data: [] });
+  });
+}
+
 describe('PracticesABM — edit mode', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('opens pre-filled edit form when Edit button is clicked', async () => {
-    mockGet.mockImplementation((url: string) => {
-      if (url === '/courses') return Promise.resolve({ data: MOCK_COURSES });
-      if (url.startsWith('/practices/course/')) return Promise.resolve({ data: MOCK_PRACTICES });
-      return Promise.resolve({ data: [] });
-    });
+    mockCoursesAndPractices();
 
     const { PracticesABM } = await import('@/components/PracticesABM');
     render(<PracticesABM />);
@@ -87,11 +97,7 @@ describe('PracticesABM — edit mode', () => {
       MOCK_PRACTICES[1],
     ];
 
-    mockGet.mockImplementation((url: string) => {
-      if (url === '/courses') return Promise.resolve({ data: MOCK_COURSES });
-      if (url.startsWith('/practices/course/')) return Promise.resolve({ data: MOCK_PRACTICES });
-      return Promise.resolve({ data: [] });
-    });
+    mockCoursesAndPractices();
     mockPut.mockResolvedValueOnce({ data: {} });
 
     const { PracticesABM } = await import('@/components/PracticesABM');
@@ -115,11 +121,7 @@ describe('PracticesABM — edit mode', () => {
 
     // After PUT, return updated data
     mockPut.mockResolvedValueOnce({ data: {} });
-    mockGet.mockImplementation((url: string) => {
-      if (url === '/courses') return Promise.resolve({ data: MOCK_COURSES });
-      if (url.startsWith('/practices/course/')) return Promise.resolve({ data: UPDATED_PRACTICES });
-      return Promise.resolve({ data: [] });
-    });
+    mockCoursesAndPractices(UPDATED_PRACTICES);
 
     // Submit
     const saveButton = screen.getByText('Guardar');
@@ -135,11 +137,7 @@ describe('PracticesABM — edit mode', () => {
   });
 
   it('cancel discards changes and closes edit form', async () => {
-    mockGet.mockImplementation((url: string) => {
-      if (url === '/courses') return Promise.resolve({ data: MOCK_COURSES });
-      if (url.startsWith('/practices/course/')) return Promise.resolve({ data: MOCK_PRACTICES });
-      return Promise.resolve({ data: [] });
-    });
+    mockCoursesAndPractices();
 
     const { PracticesABM } = await import('@/components/PracticesABM');
     render(<PracticesABM />);

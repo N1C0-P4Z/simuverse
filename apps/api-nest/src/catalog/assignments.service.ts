@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { paginate, PaginatedResult } from '../common/helpers/paginate';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 
@@ -7,19 +8,28 @@ import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 export class AssignmentsService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(filters?: { student_id?: string; course_id?: string; status?: string }) {
+  async findAll(filters?: {
+    student_id?: string;
+    course_id?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<PaginatedResult<any>> {
+    const { page = 1, limit = 20, ...queryFilters } = filters || {};
     const where: any = {};
-    if (filters?.student_id) where.student_id = filters.student_id;
-    if (filters?.course_id) where.course_id = filters.course_id;
-    if (filters?.status) where.status = filters.status;
+    if (queryFilters.student_id) where.student_id = queryFilters.student_id;
+    if (queryFilters.course_id) where.course_id = queryFilters.course_id;
+    if (queryFilters.status) where.status = queryFilters.status;
 
-    const assignments = await this.prisma.simulationAssignment.findMany({
-      where,
+    const result = await paginate(this.prisma.simulationAssignment, where, {
+      page,
+      limit,
       orderBy: { created_at: 'desc' },
     });
 
+    // Enrich with course data (no Prisma relation on SimulationAssignment)
     const enriched = await Promise.all(
-      assignments.map(async (a) => {
+      result.data.map(async (a: any) => {
         const course = await this.prisma.course.findUnique({
           where: { id: a.course_id },
           select: { title: true, category: true },
@@ -32,7 +42,7 @@ export class AssignmentsService {
       })
     );
 
-    return enriched;
+    return { ...result, data: enriched };
   }
 
   async findOne(id: number) {

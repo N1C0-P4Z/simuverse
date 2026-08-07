@@ -23,6 +23,9 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: { "@": path.resolve(__dirname, "./src") },
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+      "@simuverse/shared": path.resolve(__dirname, "../shared/src/file-upload"),
+    },
   },
 });

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { paginate, PaginatedResult } from '../common/helpers/paginate';
 
 @Injectable()
 export class UsersService {
@@ -145,18 +146,19 @@ export class UsersService {
     });
   }
 
-  async findAll(role?: string) {
-    const where = role ? { role: role as any } : {};
-    return this.prisma.user.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        is_active: true,
-        created_at: true,
-      },
+  async findAll(opts?: { page?: number; limit?: number; search?: string; role?: string }): Promise<PaginatedResult<any>> {
+    const { page = 1, limit = 20, search, role } = opts || {};
+    const where: any = {};
+    if (role) where.role = role as any;
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+    return paginate(this.prisma.user, where, {
+      page,
+      limit,
       orderBy: { name: 'asc' },
     });
   }

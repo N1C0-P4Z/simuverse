@@ -8,12 +8,14 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { LogoField, useFilePreview } from '@/components/ui/logo-field';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Building2, Plus, RotateCw, Settings, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { useAdmin } from '@/lib/admin-context';
 import { apiClient } from '@/services/ApiClient';
+import { usePagination } from '@/hooks/usePagination';
 
 interface SimulatedCompany {
   id: number;
@@ -57,8 +59,9 @@ const emptyCompany = (): Omit<SimulatedCompany, 'id'> => ({
 
 export function CompaniesABM() {
   const { readOnly } = useAdmin();
-  const [companies, setCompanies] = useState<SimulatedCompany[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: companies, total, page, totalPages, setPage, loading, error } = usePagination<SimulatedCompany>({
+    endpoint: '/simulated-companies',
+  });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(emptyCompany());
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -66,16 +69,6 @@ export function CompaniesABM() {
   const [saving, setSaving] = useState(false);
   const [logoError, setLogoError] = useState(false);
   const filePreviewUrl = useFilePreview(logoFile);
-
-  const fetchCompanies = async () => {
-    try {
-      const r = await apiClient.get('/simulated-companies');
-      setCompanies(Array.isArray(r.data) ? r.data : []);
-    } catch { setCompanies([]); }
-    setLoading(false);
-  };
-
-  useEffect(() => { fetchCompanies(); }, []);
 
   const buildPayload = (): FormData | typeof form => {
     if (!logoFile) return form;
@@ -103,7 +96,7 @@ export function CompaniesABM() {
       setForm(emptyCompany());
       setLogoFile(null);
       setEditingId(null);
-      fetchCompanies();
+      setPage(page); // trigger re-fetch
     } catch (e: any) { 
       const msg = e.response?.data?.message;
       toast.error(msg ? (Array.isArray(msg) ? msg.join(', ') : msg) : e.message); 
@@ -131,7 +124,7 @@ export function CompaniesABM() {
           try {
             await apiClient.delete(`/simulated-companies/${id}`);
             toast.success('Empresa eliminada');
-            fetchCompanies();
+            setPage(page); // trigger re-fetch
           } catch { toast.error('Error al eliminar'); }
         },
       },
@@ -142,7 +135,7 @@ export function CompaniesABM() {
   const handleReactivate = async (id: number) => {
     try {
       await apiClient.put(`/simulated-companies/${id}/reactivate`);
-      fetchCompanies();
+      setPage(page); // trigger re-fetch
       toast.success('Empresa reactivada');
     } catch { toast.error('Error al reactivar'); }
   };
@@ -162,6 +155,7 @@ export function CompaniesABM() {
   };
 
   if (loading) return <div className="p-8 text-center text-muted-foreground">Cargando empresas...</div>;
+  if (error) return <div className="p-8 text-center text-red-500">Error: {error}</div>;
 
   return (
     <div className="space-y-6">
@@ -286,11 +280,46 @@ export function CompaniesABM() {
         ))}
       </div>
 
-      {companies.length === 0 && (
+      {total === 0 && (
         <div className="text-center py-16 text-muted-foreground">
           <Building2 className="w-12 h-12 mx-auto mb-4 opacity-50" />
           <p className="font-medium">No hay empresas configuradas.</p>
           <p className="text-sm mt-1">Creá la empresa que se simula en cada curso (puede ser ficticia o real).</p>
+        </div>
+      )}
+
+      {total > 0 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-gray-500">{total} empresa{total !== 1 ? 's' : ''}</p>
+          {totalPages > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => page > 1 && setPage(page - 1)}
+                    className={page <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <PaginationItem key={p}>
+                    <PaginationLink
+                      isActive={p === page}
+                      onClick={() => setPage(p)}
+                      className="cursor-pointer"
+                    >
+                      {p}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => page < totalPages && setPage(page + 1)}
+                    className={page >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
         </div>
       )}
     </div>

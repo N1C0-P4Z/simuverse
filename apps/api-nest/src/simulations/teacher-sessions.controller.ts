@@ -11,6 +11,8 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { PaginationDto } from '../common/dto/pagination.dto';
+import { paginate } from '../common/helpers/paginate';
 import { PrismaService } from '../prisma/prisma.service';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -28,7 +30,11 @@ export class TeacherSessionsController {
     @CurrentUser() user: any,
     @Query('course_id') courseId?: string,
     @Query('student_id') studentId?: string,
+    @Query() pagination?: PaginationDto,
   ) {
+    const page = pagination?.page ?? 1;
+    const limit = pagination?.limit ?? 20;
+
     const where: any = {};
     if (courseId) where.course_id = courseId;
     if (studentId) where.student_id = studentId;
@@ -42,7 +48,7 @@ export class TeacherSessionsController {
         select: { student_id: true },
       });
       const studentIds = links.map((l) => l.student_id);
-      if (studentIds.length === 0) return [];
+      if (studentIds.length === 0) return { data: [], total: 0, page, limit };
       where.student_id = studentId
         ? studentId
         : { in: studentIds };
@@ -51,10 +57,10 @@ export class TeacherSessionsController {
       }
     }
 
-    const instances = await this.prisma.simulationInstance.findMany({
-      where,
+    const result = await paginate(this.prisma.simulationInstance, where, {
+      page,
+      limit,
       orderBy: { started_at: 'desc' },
-      take: 200,
       include: {
         student: { select: { id: true, name: true, email: true } },
         course: { select: { id: true, title: true } },
@@ -72,7 +78,7 @@ export class TeacherSessionsController {
     });
 
     const withStats = await Promise.all(
-      instances.map(async (inst) => {
+      (result.data as any[]).map(async (inst: any) => {
         const turnCount = await this.prisma.simulationChatLog.count({
           where: { simulation_instance_id: inst.id },
         });
@@ -98,7 +104,7 @@ export class TeacherSessionsController {
       }),
     );
 
-    return withStats;
+    return { ...result, data: withStats };
   }
 
   @Get(':id')

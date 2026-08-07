@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { paginate, PaginatedResult } from '../common/helpers/paginate';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 
@@ -23,12 +24,15 @@ export class DocumentsService {
     }
   }
 
-  async findAll(courseId?: string) {
+  async findAll(courseId?: string, opts?: { page?: number; limit?: number }): Promise<PaginatedResult<any>> {
+    const { page = 1, limit = 20 } = opts || {};
     const where = courseId ? { course_id: courseId } : {};
-    return this.prisma.courseDocument.findMany({
-      where,
-      orderBy: { created_at: 'desc' },
-    });
+    return paginate(this.prisma.courseDocument, where, { page, limit, orderBy: { created_at: 'desc' } });
+  }
+
+  async findAllDropdown(courseId?: string) {
+    const where = courseId ? { course_id: courseId } : {};
+    return this.prisma.courseDocument.findMany({ where, orderBy: { created_at: 'desc' } });
   }
 
   async findOne(id: number) {

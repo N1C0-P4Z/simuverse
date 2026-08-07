@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { paginate, PaginatedResult } from '../common/helpers/paginate';
 import { CreateNotificationDto, UpdateNotificationDto } from './dto/notification.dto';
 
 @Injectable()
@@ -23,13 +24,20 @@ export class NotificationsService {
     return created;
   }
 
-  async findAll(params: { recipient_id?: string; unread?: string }) {
+  async findAll(params: {
+    recipient_id?: string;
+    unread?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<PaginatedResult<any>> {
+    const { page = 1, limit = 20, ...filters } = params;
     const where: any = {};
-    if (params.recipient_id) where.recipient_id = params.recipient_id;
-    if (params.unread === 'true') where.is_read = false;
+    if (filters.recipient_id) where.recipient_id = filters.recipient_id;
+    if (filters.unread === 'true') where.is_read = false;
 
-    return this.prisma.notification.findMany({
-      where,
+    return paginate(this.prisma.notification, where, {
+      page,
+      limit,
       orderBy: { created_at: 'desc' },
     });
   }

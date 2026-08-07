@@ -10,7 +10,9 @@ import {
   HttpCode,
   HttpStatus,
   ParseIntPipe,
+  Query,
 } from '@nestjs/common';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { AdminService } from './admin.service';
 import { CoursesService } from '../courses/courses.service';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -28,8 +30,8 @@ export class AdminController {
   // ── Courses (admin view) ────────────────────────────────────────
 
   @Get('courses')
-  async getCourses() {
-    return this.coursesService.findAll();
+  async getCourses(@Query() pagination: PaginationDto) {
+    return this.coursesService.findAll({ page: pagination.page, limit: pagination.limit });
   }
 
   @Delete('courses/:id')

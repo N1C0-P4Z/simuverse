@@ -67,7 +67,7 @@ export default function TeacherSessionsPage() {
   const [detailLoading, setDetailLoading] = useState(false);
 
   useEffect(() => {
-    apiClient.get('/courses').then((res) => {
+    apiClient.get('/courses/dropdown/list').then((res) => {
       const data = Array.isArray(res.data) ? res.data : [];
       setCourses(data);
     }).catch(() => setCourses([]));
@@ -77,10 +77,13 @@ export default function TeacherSessionsPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
+      params.set('limit', '100');
+      params.set('page', '1');
       if (courseId) params.set('course_id', courseId);
       if (studentId) params.set('student_id', studentId);
       const res = await apiClient.get(`/teacher/sessions?${params.toString()}`);
-      setSessions(Array.isArray(res.data) ? res.data : []);
+      const raw = res.data;
+      setSessions(Array.isArray(raw) ? raw : (raw?.data ?? []));
     } catch {
       setSessions([]);
     } finally {

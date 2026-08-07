@@ -34,11 +34,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { UsersABM } from '@/components/UsersABM';
 import { useAuth } from '@/hooks/useAuth';
+import { usePagination } from '@/hooks/usePagination';
 import { useAdmin } from '@/lib/admin-context';
 import { apiClient } from '@/services/ApiClient';
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Copy, Plus, Power, Save, Settings, Shield, Trash2 } from 'lucide-react';
@@ -108,9 +110,7 @@ const emptyForm: CourseForm = {
 const AdminPanel = ({ tabId }: { tabId?: string }) => {
   const { user, hasRole, loading } = useAuth();
   const router = useRouter();
-  const [courses, setCourses] = useState<any[]>([]);
   const [dbCategories, setDbCategories] = useState<Array<{ id: number; name: string; code: string }>>([]);
-  const [loadingCourses, setLoadingCourses] = useState(true);
   const [simCompanies, setSimCompanies] = useState<Array<{ id: number; name: string; short_name?: string }>>([]);
   const [endorsersList, setEndorsersList] = useState<Array<{ id: number; name: string }>>([]);
   const [foundationsList, setFoundationsList] = useState<Array<{ id: number; name: string }>>([]);
@@ -139,7 +139,18 @@ const AdminPanel = ({ tabId }: { tabId?: string }) => {
   const currentTab = tabId || contextTab;
   const [showPromptConfigModal, setShowPromptConfigModal] = useState(false);
   const [selectedCourseForPromptConfig, setSelectedCourseForPromptConfig] = useState<any>(null);
-  const [courseFilter, setCourseFilter] = useState<'all' | 'active' | 'inactive'>('all'); // Filtro de cursos
+  const [courseFilter, setCourseFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const {
+    data: courses,
+    total: coursesTotal,
+    page: coursesPage,
+    totalPages: coursesTotalPages,
+    setPage: setCoursesPage,
+    setExtraParams: setCoursesExtraParams,
+    loading: loadingCourses,
+  } = usePagination<any>({
+    endpoint: '/courses',
+  });
   const [hardDeleteCourseId, setHardDeleteCourseId] = useState<string | null>(null);
   const [teachers, setTeachers] = useState<Array<{ id: string; name: string; email: string }>>([]);
   const [formErrors, setFormErrors] = useState<{
@@ -154,41 +165,42 @@ const AdminPanel = ({ tabId }: { tabId?: string }) => {
     if (!loading && (!user || (!hasRole('admin') && !hasRole('ministerio')))) router.push('/auth');
   }, [user, loading, hasRole, router]);
 
-  const fetchCourses = async () => {
-    setLoadingCourses(true);
-    try {
-      const res = await apiClient.get('/courses');
-      if (res.data) setCourses(res.data);
-    } catch (error) {
-      console.error('Error fetching courses:', error);
-      toast.error('Error al cargar los cursos');
-    } finally {
-      setLoadingCourses(false);
+  const refreshCourses = () => setCoursesPage(coursesPage);
+
+  useEffect(() => {
+    if (courseFilter === 'active') {
+      setCoursesExtraParams({ is_active: 'true' });
+    } else if (courseFilter === 'inactive') {
+      setCoursesExtraParams({ is_active: 'false' });
+    } else {
+      setCoursesExtraParams({});
     }
-  };
+  }, [courseFilter, setCoursesExtraParams]);
 
   useEffect(() => {
     if (user) {
-      fetchCourses();
-      // Cargar categorías
-      apiClient.get('/categories')
+      apiClient.get('/categories/dropdown/list')
         .then(r => setDbCategories(Array.isArray(r.data) ? r.data : []))
         .catch(() => {});
       apiClient.get('/simulated-companies')
-        .then(r => r.data)
+        .then(r => { const d = r.data?.data ?? r.data; return d; })
         .then(d => setSimCompanies(Array.isArray(d) ? d.map((c: any) => ({ id: c.id, name: c.name, short_name: c.short_name })) : []))
         .catch(() => {});
       apiClient.get('/endorsers')
-        .then(r => setEndorsersList(Array.isArray(r.data) ? r.data.map((e: any) => ({ id: e.id, name: e.name })) : []))
+        .then(r => { const d = r.data?.data ?? r.data; return d; })
+        .then(d => setEndorsersList(Array.isArray(d) ? d.map((e: any) => ({ id: e.id, name: e.name })) : []))
         .catch(() => {});
       apiClient.get('/foundation-config')
-        .then(r => setFoundationsList(Array.isArray(r.data) ? r.data.map((f: any) => ({ id: f.id, name: f.name })) : []))
+        .then(r => { const d = r.data?.data ?? r.data; return d; })
+        .then(d => setFoundationsList(Array.isArray(d) ? d.map((f: any) => ({ id: f.id, name: f.name })) : []))
         .catch(() => {});
       apiClient.get('/sponsors')
-        .then(r => setSponsorsList(Array.isArray(r.data) ? r.data.map((s: any) => ({ id: s.id, name: s.name })) : []))
+        .then(r => { const d = r.data?.data ?? r.data; return d; })
+        .then(d => setSponsorsList(Array.isArray(d) ? d.map((s: any) => ({ id: s.id, name: s.name })) : []))
         .catch(() => {});
       apiClient.get('/users?role=teacher')
-        .then(r => setTeachers(Array.isArray(r.data) ? r.data : []))
+        .then(r => { const d = r.data?.data ?? r.data; return d; })
+        .then(d => setTeachers(Array.isArray(d) ? d : []))
         .catch(() => {});
     }
   }, [user]);
@@ -246,7 +258,7 @@ const AdminPanel = ({ tabId }: { tabId?: string }) => {
       setFormErrors({});
       setEditingId(null);
       setEditingRequiresPassword(false);
-      fetchCourses();
+      refreshCourses();
     } catch (error: any) {
       toast.error(error.message || 'Error al guardar el curso');
     }
@@ -292,7 +304,7 @@ const AdminPanel = ({ tabId }: { tabId?: string }) => {
         setEditingRequiresPassword(true);
         setForm((p) => ({ ...p, password: '', clear_password: false }));
         toast.success('Contraseña regenerada');
-        fetchCourses();
+        refreshCourses();
       } else {
         toast.error('No se recibió la nueva contraseña');
       }
@@ -310,7 +322,7 @@ const AdminPanel = ({ tabId }: { tabId?: string }) => {
           try {
             const response = await apiClient.delete(`/admin/courses/${id}`);
             toast.success(response.data.message || 'Curso desactivado');
-            fetchCourses();
+            refreshCourses();
           } catch (error: any) {
             if (error.response?.status === 409) {
               const data = error.response.data;
@@ -334,7 +346,7 @@ const AdminPanel = ({ tabId }: { tabId?: string }) => {
     try {
       await apiClient.put(`/admin/courses/${id}/reactivate`);
       toast.success('Curso reactivado');
-      fetchCourses();
+      refreshCourses();
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Error al reactivar el curso');
     }
@@ -345,7 +357,7 @@ const AdminPanel = ({ tabId }: { tabId?: string }) => {
       await apiClient.delete(`/courses/${id}/permanent`);
       toast.success('Curso eliminado permanentemente');
       setHardDeleteCourseId(null);
-      fetchCourses();
+      refreshCourses();
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Error al eliminar el curso');
     }
@@ -376,7 +388,7 @@ const AdminPanel = ({ tabId }: { tabId?: string }) => {
     try {
       await apiClient.post('/courses', payload);
       toast.success(`Copia creada: "${payload.title}"`);
-      fetchCourses();
+      refreshCourses();
     } catch (e: any) {
       toast.error(e.message || 'Error al duplicar el curso');
     }
@@ -738,12 +750,12 @@ const AdminPanel = ({ tabId }: { tabId?: string }) => {
                     </div>
 
                     <div className="space-y-2">
-                      <Label className="text-sm font-semibold">🤝 Avaladores <span className="text-gray-400 font-normal">(opcional)</span></Label>
+                      <Label className="text-sm font-semibold">🤝 Auspiciantes <span className="text-gray-400 font-normal">(opcional)</span></Label>
                       <MultiSelect
                         items={endorsersList}
                         selected={form.endorser_ids}
                         onChange={ids => setForm(p => ({ ...p, endorser_ids: ids }))}
-                        placeholder="Sin avaladores"
+                        placeholder="Sin auspiciantes"
                       />
                     </div>
 
@@ -758,12 +770,12 @@ const AdminPanel = ({ tabId }: { tabId?: string }) => {
                     </div>
 
                     <div className="space-y-2">
-                      <Label className="text-sm font-semibold">💼 Sponsors <span className="text-gray-400 font-normal">(opcional)</span></Label>
+                      <Label className="text-sm font-semibold">💼 Patrocinadores <span className="text-gray-400 font-normal">(opcional)</span></Label>
                       <MultiSelect
                         items={sponsorsList}
                         selected={form.sponsor_ids}
                         onChange={ids => setForm(p => ({ ...p, sponsor_ids: ids }))}
-                        placeholder="Sin sponsors"
+                        placeholder="Sin patrocinadores"
                       />
                     </div>
 
@@ -911,7 +923,7 @@ const AdminPanel = ({ tabId }: { tabId?: string }) => {
                 className="gap-2"
               >
                 <Settings className="w-4 h-4" />
-                Todos ({courses.length})
+                Todos{courseFilter === 'all' ? ` (${coursesTotal})` : ''}
               </Button>
               <Button 
                 variant={courseFilter === 'active' ? 'default' : 'outline'} 
@@ -920,7 +932,7 @@ const AdminPanel = ({ tabId }: { tabId?: string }) => {
                 className="gap-2"
               >
                 <Badge variant="default" className="text-xs bg-green-600">✓</Badge>
-                Activos ({courses.filter(c => c.is_active).length})
+                Activos{courseFilter === 'active' ? ` (${coursesTotal})` : ''}
               </Button>
               <Button 
                 variant={courseFilter === 'inactive' ? 'default' : 'outline'} 
@@ -929,18 +941,25 @@ const AdminPanel = ({ tabId }: { tabId?: string }) => {
                 className="gap-2"
               >
                 <Badge variant="secondary" className="text-xs bg-gray-400">✕</Badge>
-                Inactivos ({courses.filter(c => !c.is_active).length})
+                Inactivos{courseFilter === 'inactive' ? ` (${coursesTotal})` : ''}
               </Button>
             </div>
 
             <div className="grid gap-4">
-              {courses
-                .filter(course => {
-                  if (courseFilter === 'active') return course.is_active;
-                  if (courseFilter === 'inactive') return !course.is_active;
-                  return true; // 'all'
-                })
-                .map(course => (
+              {loadingCourses ? (
+                <div className="text-center py-16 text-muted-foreground flex flex-col items-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+                  <p>Cargando cursos...</p>
+                </div>
+              ) : courses.length === 0 ? (
+                <div className="text-center py-16 text-muted-foreground">
+                  <Settings className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>
+                    No hay cursos {courseFilter === 'active' ? 'activos' : courseFilter === 'inactive' ? 'inactivos' : 'configurados'}. {courseFilter === 'all' ? 'Cree el primero.' : ''}
+                  </p>
+                </div>
+              ) : (
+              courses.map(course => (
                 <Card key={course.id} className={`glass-card ${!course.is_active ? 'opacity-60' : ''}`}>
                   <CardContent className="flex items-center justify-between py-4">
                     <div className="flex-1">
@@ -996,31 +1015,44 @@ const AdminPanel = ({ tabId }: { tabId?: string }) => {
                     </div>
                   </CardContent>
                 </Card>
-              ))}
-              {loadingCourses ? (
-                <div className="text-center py-16 text-muted-foreground flex flex-col items-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-                  <p>Cargando cursos...</p>
-                </div>
-              ) : courses.length === 0 ? (
-                <div className="text-center py-16 text-muted-foreground">
-                  <Settings className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>No hay cursos configurados. Cree el primero.</p>
-                </div>
-              ) : null}
-              {!loadingCourses && courses.length > 0 && courses.filter(c => {
-                if (courseFilter === 'active') return c.is_active;
-                if (courseFilter === 'inactive') return !c.is_active;
-                return true;
-              }).length === 0 && (
-                <div className="text-center py-16 text-muted-foreground">
-                  <Settings className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>
-                    No hay cursos {courseFilter === 'active' ? 'activos' : courseFilter === 'inactive' ? 'inactivos' : ''}.
-                  </p>
-                </div>
+              ))
               )}
             </div>
+
+            {coursesTotal > 0 && (
+              <div className="flex items-center justify-between mt-4">
+                <p className="text-sm text-gray-500">{coursesTotal} curso{coursesTotal !== 1 ? 's' : ''}</p>
+                {coursesTotalPages > 1 && (
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          onClick={() => coursesPage > 1 && setCoursesPage(coursesPage - 1)}
+                          className={coursesPage <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                        />
+                      </PaginationItem>
+                      {Array.from({ length: coursesTotalPages }, (_, i) => i + 1).map(p => (
+                        <PaginationItem key={p}>
+                          <PaginationLink
+                            isActive={p === coursesPage}
+                            onClick={() => setCoursesPage(p)}
+                            className="cursor-pointer"
+                          >
+                            {p}
+                          </PaginationLink>
+                        </PaginationItem>
+                      ))}
+                      <PaginationItem>
+                        <PaginationNext
+                          onClick={() => coursesPage < coursesTotalPages && setCoursesPage(coursesPage + 1)}
+                          className={coursesPage >= coursesTotalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                )}
+              </div>
+            )}
           </div>
         )}
 

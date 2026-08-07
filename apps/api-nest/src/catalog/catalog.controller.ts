@@ -6,6 +6,7 @@ import {
   Delete,
   Param,
   Body,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -20,6 +21,7 @@ import { UpdateTechSheetDto } from './dto/update-tech-sheet.dto';
 import { UpdateTechSheetConfigDto } from './dto/update-tech-sheet-config.dto';
 import { TriggerAnalysisDto } from './dto/trigger-analysis.dto';
 import { UpdateTechSheetPromptsDto } from './dto/update-tech-sheet-prompts.dto';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
@@ -39,8 +41,13 @@ export class CatalogController {
   // ── Categories ──────────────────────────────────────────────────
 
   @Get('categories')
-  async findAllCategories() {
-    return this.categoriesService.findAll();
+  async findAllCategories(@Query() pagination: PaginationDto) {
+    return this.categoriesService.findAll({ page: pagination.page, limit: pagination.limit });
+  }
+
+  @Get('categories/dropdown/list')
+  async findAllCategoriesDropdown() {
+    return this.categoriesService.findAllDropdown();
   }
 
   @Get('categories/:id')
@@ -73,6 +80,12 @@ export class CatalogController {
     return this.categoriesService.reactivate(id);
   }
 
+  @Delete('categories/:id/hard')
+  @HttpCode(HttpStatus.OK)
+  async hardRemoveCategory(@Param('id', ParseIntPipe) id: number) {
+    return this.categoriesService.hardRemove(id);
+  }
+
   // ── Tech Sheets ─────────────────────────────────────────────────
 
   @Get('tech-sheets/valid/list')
@@ -80,9 +93,14 @@ export class CatalogController {
     return this.techSheetsService.findValid();
   }
 
+  @Get('tech-sheets/dropdown/list')
+  async findAllTechSheetsDropdown() {
+    return this.techSheetsService.findAllDropdown();
+  }
+
   @Get('tech-sheets')
-  async findAllTechSheets() {
-    return this.techSheetsService.findAll();
+  async findAllTechSheets(@Query() pagination: PaginationDto) {
+    return this.techSheetsService.findAll({ page: pagination.page, limit: pagination.limit });
   }
 
   @Get('tech-sheets/:id/config')

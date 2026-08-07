@@ -32,7 +32,8 @@ export function Footer({ sponsors: initialSponsors, courseId: propCourseId, clas
       try {
         const endpoint = courseId ? `/courses/${courseId}/sponsors` : '/sponsors';
         const res = await apiClient.get(endpoint);
-        const data = Array.isArray(res.data) ? res.data : [];
+        const raw = res.data?.data ?? res.data;
+        const data = Array.isArray(raw) ? raw : [];
         if (isMounted) {
           setSponsors(data.filter((s: any) => s && s.is_active !== false));
         }
@@ -57,7 +58,7 @@ export function Footer({ sponsors: initialSponsors, courseId: propCourseId, clas
         {/* Sponsors Carousel */}
         {sponsors.length > 0 && (
           <div className="border-b border-slate-800 pb-6">
-            <SponsorCarousel sponsors={sponsors} title="Sponsors" />
+            <SponsorCarousel sponsors={sponsors} title="Patrocinadores" />
           </div>
         )}
 

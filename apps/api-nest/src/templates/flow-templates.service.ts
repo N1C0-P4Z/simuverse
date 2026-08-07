@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { paginate, PaginatedResult } from '../common/helpers/paginate';
 import { CreateFlowTemplateDto } from './dto/create-flow-template.dto';
 import { UpdateFlowTemplateDto } from './dto/update-flow-template.dto';
 
@@ -7,19 +8,43 @@ import { UpdateFlowTemplateDto } from './dto/update-flow-template.dto';
 export class FlowTemplatesService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(filters?: { family?: string; course_id?: string; active?: string }) {
+  async findAll(filters?: { family?: string; course_id?: string; active?: string; includeInactive?: string }, opts?: { page?: number; limit?: number }): Promise<PaginatedResult<any>> {
+    const { page = 1, limit = 20 } = opts || {};
     const where: any = {};
     if (filters?.family) where.family = filters.family;
     if (filters?.course_id) where.course_id = filters.course_id;
-    if (filters?.active !== undefined) where.is_active = filters.active !== 'false';
-    else where.is_active = true;
+    if (filters?.includeInactive === 'true') {
+      // No is_active filter — show all
+    } else if (filters?.active !== undefined) {
+      where.is_active = filters.active !== 'false';
+    } else {
+      where.is_active = true;
+    }
 
-    const templates = await this.prisma.flowTemplate.findMany({
-      where,
-      orderBy: [{ family: 'asc' }, { title: 'asc' }],
+    const result = await paginate(this.prisma.flowTemplate, where, {
+      page,
+      limit,
+      orderBy: { family: 'asc' },
     });
 
     // Parse template_data from JSON string to object
+    return {
+      ...result,
+      data: result.data.map((t: any) => {
+        try {
+          return { ...t, template_data: JSON.parse(t.template_data as string) };
+        } catch {
+          return t;
+        }
+      }),
+    };
+  }
+
+  async findAllDropdown() {
+    const templates = await this.prisma.flowTemplate.findMany({
+      where: { is_active: true },
+      orderBy: { family: 'asc' },
+    });
     return templates.map((t) => {
       try {
         return { ...t, template_data: JSON.parse(t.template_data as string) };

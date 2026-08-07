@@ -2,12 +2,16 @@
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { API_BASE, authFetch } from '@/lib/api';
 import { useAdmin } from '@/lib/admin-context';
 import { apiClient } from '@/services/ApiClient';
+import { usePagination } from '@/hooks/usePagination';
 import { ExternalLink, FileText, Paperclip, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { ALLOWED_EXTENSIONS } from '@simuverse/shared';
 
 interface Document {
   id: number;
@@ -25,18 +29,6 @@ interface Course {
 }
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
-const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.png', '.jpg', '.jpeg', '.txt'];
-const ALLOWED_MIME_TYPES = [
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'text/csv',
-  'image/png',
-  'image/jpeg',
-  'text/plain',
-];
 
 function isValidHttpsUrl(url: string): boolean {
   try {
@@ -65,37 +57,34 @@ const emptyForm = {
 
 export function DocumentsABM() {
   const { readOnly } = useAdmin();
-  const [documents, setDocuments] = useState<Document[]>([]);
+  const { data: documents, total, page, totalPages, setPage, setExtraParams, loading } = usePagination<Document>({
+    endpoint: '/documents',
+  });
   const [courses, setCourses] = useState<Course[]>([]);
-  const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({ ...emptyForm });
+  const [courseFilter, setCourseFilter] = useState('');
 
   useEffect(() => {
-    fetchDocuments();
     fetchCourses();
   }, []);
 
-  const fetchDocuments = async () => {
-    try {
-      const response = await apiClient.get('/documents');
-      const data = response.data;
-      setDocuments(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Error fetching documents:', error);
-      setDocuments([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const refreshList = () => setPage(page);
+
+  useEffect(() => {
+    const params: Record<string, unknown> = {};
+    if (courseFilter) params.course_id = courseFilter;
+    setExtraParams(params);
+  }, [courseFilter]);
+
 
   const fetchCourses = async () => {
     try {
-      const response = await apiClient.get('/courses');
+      const response = await apiClient.get('/courses/dropdown/list');
       const data = response.data;
       setCourses(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -135,8 +124,8 @@ export function DocumentsABM() {
     if (!file) return;
 
     const ext = `.${file.name.split('.').pop()?.toLowerCase() || ''}`;
-    if (!ALLOWED_EXTENSIONS.includes(ext) && !ALLOWED_MIME_TYPES.includes(file.type)) {
-      toast.error('Tipo de archivo no permitido. Usá PDF, DOC, DOCX, XLS, XLSX, CSV, PNG, JPG o TXT.');
+    if (!(ALLOWED_EXTENSIONS as readonly string[]).includes(ext)) {
+      toast.error('Tipo de archivo no permitido. Usá PDF, DOC, DOCX, XLS, XLSX o CSV.');
       e.target.value = '';
       return;
     }
@@ -249,7 +238,7 @@ export function DocumentsABM() {
       }
 
       resetForm();
-      await fetchDocuments();
+      refreshList();
     } catch (error) {
       console.error('Error saving document:', error);
       toast.error(error instanceof Error ? error.message : 'Error al guardar el documento');
@@ -266,7 +255,7 @@ export function DocumentsABM() {
           try {
             await apiClient.delete(`/documents/${id}`);
             if (editingId === id) resetForm();
-            await fetchDocuments();
+            refreshList();
             toast.success('Documento eliminado');
           } catch (error) {
             console.error('Error deleting document:', error);
@@ -281,7 +270,7 @@ export function DocumentsABM() {
   const handleReactivate = async (id: number) => {
     try {
       await apiClient.put(`/documents/${id}/reactivate`);
-      await fetchDocuments();
+      refreshList();
       toast.success('Documento reactivado');
     } catch { toast.error('Error al reactivar'); }
   };
@@ -313,6 +302,22 @@ export function DocumentsABM() {
           </Button>
         )}
       </div>
+
+      {/* Course filter */}
+      {!formOpen && (
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium text-gray-600">Filtrar por curso:</span>
+          <Select value={courseFilter} onValueChange={v => setCourseFilter(v === '__all__' ? '' : v)}>
+            <SelectTrigger className="w-64">
+              <SelectValue placeholder="Todos los cursos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todos los cursos</SelectItem>
+              {courses.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {formOpen && (
         <Card className={`p-6 border ${editingId ? 'border-amber-200 bg-amber-50' : 'border-blue-200 bg-blue-50'}`}>
@@ -356,7 +361,7 @@ export function DocumentsABM() {
                 ref={fileInputRef}
                 type="file"
                 className="hidden"
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg,.txt"
+                accept={ALLOWED_EXTENSIONS.join(',')}
                 onChange={handleFileChange}
               />
               <div className="flex flex-wrap items-center gap-2">
@@ -391,7 +396,7 @@ export function DocumentsABM() {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-gray-500">Máximo 5 MB. PDF, DOC, DOCX, XLS, XLSX, CSV, imágenes o TXT.</p>
+              <p className="text-xs text-gray-500">Máximo 5 MB. {ALLOWED_EXTENSIONS.join(', ')}.</p>
             </div>
 
             <div>
@@ -444,7 +449,7 @@ export function DocumentsABM() {
                   <FileText className="w-5 h-5 text-blue-600" />
                   <div>
                     <h4 className="font-semibold text-lg">{doc.document_name}</h4>
-                    <div className="flex gap-3 mt-1 text-sm">
+                     <div className="flex gap-3 mt-1 text-sm">
                       <span className="text-gray-600">Curso: {getCourseName(doc.course_id)}</span>
                     </div>
                   </div>
@@ -504,6 +509,42 @@ export function DocumentsABM() {
         <Card className="p-8 text-center">
           <p className="text-gray-600">No hay documentos. Subí un archivo o agregá un enlace para empezar.</p>
         </Card>
+      )}
+
+      {/* Pagination */}
+      {total > 0 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-gray-500">{total} documento{total !== 1 ? 's' : ''}</p>
+          {totalPages > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => page > 1 && setPage(page - 1)}
+                    className={page <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <PaginationItem key={p}>
+                    <PaginationLink
+                      isActive={p === page}
+                      onClick={() => setPage(p)}
+                      className="cursor-pointer"
+                    >
+                      {p}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => page < totalPages && setPage(page + 1)}
+                    className={page >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
+        </div>
       )}
     </div>
   );

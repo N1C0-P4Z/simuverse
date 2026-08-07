@@ -19,6 +19,7 @@ import {
   CreateKpiDto,
   ProcessRequirementDto,
 } from './dto/ministry.dto';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
@@ -38,8 +39,14 @@ export class MinistryController {
   async listRequirements(
     @Query('course_id') course_id?: string,
     @Query('status') status?: string,
+    @Query() pagination?: PaginationDto,
   ) {
-    return this.ministryService.listRequirements({ course_id, status });
+    return this.ministryService.listRequirements({
+      course_id,
+      status,
+      page: pagination?.page,
+      limit: pagination?.limit,
+    });
   }
 
   @Get('requirements/:id')
@@ -91,8 +98,15 @@ export class MinistryController {
     @Query('course_id') course_id?: string,
     @Query('ministry_requirement_id') ministry_requirement_id?: string,
     @Query('active') active?: string,
+    @Query() pagination?: PaginationDto,
   ) {
-    return this.ministryService.listKpis({ course_id, ministry_requirement_id, active });
+    return this.ministryService.listKpis({
+      course_id,
+      ministry_requirement_id,
+      active,
+      page: pagination?.page,
+      limit: pagination?.limit,
+    });
   }
 
   @Get('kpis/:id')

@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { CreateNotificationDto, UpdateNotificationDto } from './dto/notification.dto';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
@@ -35,8 +36,14 @@ export class NotificationsController {
   async findAll(
     @Query('recipient_id') recipient_id?: string,
     @Query('unread') unread?: string,
+    @Query() pagination?: PaginationDto,
   ) {
-    return this.notificationsService.findAll({ recipient_id, unread });
+    return this.notificationsService.findAll({
+      recipient_id,
+      unread,
+      page: pagination?.page,
+      limit: pagination?.limit,
+    });
   }
 
   @Get(':id')

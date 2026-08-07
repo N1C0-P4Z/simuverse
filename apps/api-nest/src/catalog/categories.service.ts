@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { paginate, PaginatedResult } from '../common/helpers/paginate';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 
@@ -7,8 +8,13 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 export class CategoriesService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll() {
-    return this.prisma.category.findMany({ orderBy: { name: 'asc' } });
+  async findAll(opts?: { page?: number; limit?: number }): Promise<PaginatedResult<any>> {
+    const { page = 1, limit = 20 } = opts || {};
+    return paginate(this.prisma.category, {}, { page, limit, orderBy: { name: 'asc' } });
+  }
+
+  async findAllDropdown() {
+    return this.prisma.category.findMany({ where: {}, orderBy: { name: 'asc' } });
   }
 
   async findOne(id: number) {
@@ -64,5 +70,11 @@ export class CategoriesService {
     await this.findOne(id);
     await this.prisma.category.update({ where: { id }, data: { is_active: true } });
     return { message: 'Category reactivated' };
+  }
+
+  async hardRemove(id: number) {
+    await this.findOne(id);
+    await this.prisma.category.delete({ where: { id } });
+    return { message: 'Category permanently deleted' };
   }
 }

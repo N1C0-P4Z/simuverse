@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { paginate, PaginatedResult } from '../common/helpers/paginate';
 import { CreateSponsorDto } from './dto/create-sponsor.dto';
 import { UpdateSponsorDto } from './dto/update-sponsor.dto';
 
@@ -7,8 +8,9 @@ import { UpdateSponsorDto } from './dto/update-sponsor.dto';
 export class SponsorsService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll() {
-    return this.prisma.sponsor.findMany({ orderBy: { name: 'asc' } });
+  async findAll(opts?: { page?: number; limit?: number }): Promise<PaginatedResult<any>> {
+    const { page = 1, limit = 20 } = opts || {};
+    return paginate(this.prisma.sponsor, {}, { page, limit, orderBy: { name: 'asc' } });
   }
 
   async findOne(id: number) {

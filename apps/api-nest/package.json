@@ -40,7 +40,8 @@
     "passport-custom": "^1.1.1",
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.0",
-    "rxjs": "^7.8.0"
+    "rxjs": "^7.8.0",
+    "@simuverse/shared": "*"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.4.0",
@@ -71,7 +72,10 @@
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
+      "^.+\\.(t|j)s$": ["ts-jest", { "diagnostics": false }]
+    },
+    "moduleNameMapper": {
+      "^@simuverse/shared$": "<rootDir>/../../shared/src/file-upload"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"

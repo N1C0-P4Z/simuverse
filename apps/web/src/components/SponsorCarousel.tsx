@@ -97,7 +97,7 @@ function SponsorLogo({ sponsor }: { sponsor: SponsorItem }) {
   return content;
 }
 
-export function SponsorCarousel({ sponsors, title = 'Sponsors y Aliados' }: SponsorCarouselProps) {
+export function SponsorCarousel({ sponsors, title = 'Patrocinadores y Aliados' }: SponsorCarouselProps) {
   if (!sponsors || sponsors.length === 0) return null;
 
   return (

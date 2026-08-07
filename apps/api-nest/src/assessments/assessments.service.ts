@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { paginate, PaginatedResult } from '../common/helpers/paginate';
 import { CreateAssessmentDto } from './dto/create-assessment.dto';
 import * as crypto from 'crypto';
 
@@ -66,13 +67,20 @@ export class AssessmentsService {
     return { overall_score, kpi_scores, passed_kpis, failed_kpis };
   }
 
-  async findAll(filters?: { course_id?: string; user_id?: string }) {
+  async findAll(filters?: {
+    course_id?: string;
+    user_id?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<PaginatedResult<any>> {
+    const { page = 1, limit = 20, ...queryFilters } = filters || {};
     const where: any = {};
-    if (filters?.course_id) where.course_id = filters.course_id;
-    if (filters?.user_id) where.user_id = filters.user_id;
+    if (queryFilters.course_id) where.course_id = queryFilters.course_id;
+    if (queryFilters.user_id) where.user_id = queryFilters.user_id;
 
-    return this.prisma.assessment.findMany({
-      where,
+    return paginate(this.prisma.assessment, where, {
+      page,
+      limit,
       orderBy: { created_at: 'desc' },
       include: {
         simulation: { select: { status: true } },

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, Query, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { IsString, IsOptional, IsBoolean } from 'class-validator';
 import { Transform } from 'class-transformer';
@@ -8,6 +8,8 @@ import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Permissions } from '../common/decorators/permissions.decorator';
 import { PrismaService } from '../prisma/prisma.service';
+import { PaginationDto } from '../common/dto/pagination.dto';
+import { paginate } from '../common/helpers/paginate';
 import { logoUploadOptions, resolveLogoUrl, cleanupOldLogo } from '../files/logo-upload';
 
 // multipart/form-data sends booleans as the strings "true"/"false"
@@ -105,8 +107,11 @@ export class SimulatedCompaniesController {
   constructor(private prisma: PrismaService) {}
 
   @Get()
-  async findAll() {
-    return (this.prisma as any).simulatedCompany.findMany();
+  async findAll(@Query() pagination: PaginationDto) {
+    return paginate((this.prisma as any).simulatedCompany, {}, {
+      page: pagination.page,
+      limit: pagination.limit,
+    });
   }
 
   @Get(':id')
