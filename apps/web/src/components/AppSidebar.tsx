@@ -20,7 +20,7 @@ import { ADMIN_NAV_GROUPS } from '@/lib/admin-nav';
 import { ROLE_NAV } from '@/lib/nav-config';
 import { useSidebarHeader } from '@/lib/sidebar-header-context';
 import { apiClient } from '@/services/ApiClient';
-import { ArrowLeft, ChevronDown, ChevronRight, LogOut, Menu, PanelLeftClose, Shield } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronRight, LogOut, Menu, PanelLeftClose } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -177,7 +177,11 @@ export function AppSidebar() {
                 className={`group-data-[collapsible=icon]:!p-0 ${open ? "pointer-events-none" : ""}`}
               >
                 <div className="group/logo relative flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                  <Shield className="size-4 transition-all group-data-[collapsible=icon]:group-hover/logo:scale-0 group-data-[collapsible=icon]:group-hover/logo:opacity-0" />
+                  <img
+                    src="/logos/fundacion-logo.svg"
+                    alt="SimuVerse"
+                    className="size-4 object-contain transition-all group-data-[collapsible=icon]:group-hover/logo:scale-0 group-data-[collapsible=icon]:group-hover/logo:opacity-0"
+                  />
                   <Menu className="absolute size-4 scale-0 opacity-0 transition-all group-data-[collapsible=icon]:group-hover/logo:scale-100 group-data-[collapsible=icon]:group-hover/logo:opacity-100" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">

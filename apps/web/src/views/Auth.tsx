@@ -14,7 +14,7 @@ import {
   isFirebaseConfigured,
 } from '@/lib/firebase';
 import { apiClient } from '@/services/ApiClient';
-import { Bot, Eye, EyeOff, GraduationCap, Shield, ArrowLeft } from 'lucide-react';
+import { Bot, Eye, EyeOff, GraduationCap, ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -213,8 +213,8 @@ const Auth = () => {
       </Button>
       <div className="w-full max-w-md fade-in">
         <header className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-4">
-            <Shield className="w-8 h-8 text-primary" />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4">
+            <img src="/logos/fundacion-logo.svg" alt="SimuVerse" className="w-8 h-8 object-contain" />
           </div>
           <h1 className="text-3xl font-bold">SimuVerse</h1>
           <p className="text-muted-foreground mt-1">Motor de Simulación Modular</p>
