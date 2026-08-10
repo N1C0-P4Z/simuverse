@@ -131,6 +131,38 @@ describe('CourseRubricService', () => {
       });
       expect(result.name).toBe(DEFAULT_RUBRIC_NAME);
     });
+
+    it('lazy-clones default rubric when course has none', async () => {
+      prisma.course.findUnique.mockResolvedValue({ id: 'course-1' });
+      const cloned = {
+        id: 'rubric-new',
+        course_id: 'course-1',
+        name: DEFAULT_RUBRIC_NAME,
+        pass_threshold: DEFAULT_PASS_THRESHOLD,
+        active: true,
+        created_at: new Date('2026-01-01'),
+        criteria: [],
+        levels: [],
+      };
+      prisma.courseRubric.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null) // cloneDefaultRubricToCourse existing check
+        .mockResolvedValueOnce(cloned);
+      prisma.courseRubric.create.mockResolvedValue({ id: 'rubric-new' });
+      prisma.rubricLevel.create.mockImplementation(({ data }: any) =>
+        Promise.resolve({ id: `level-${data.value}`, ...data }),
+      );
+      prisma.rubricCriterion.create.mockImplementation(({ data }: any) =>
+        Promise.resolve({ id: `crit-${data.code}`, ...data }),
+      );
+      prisma.rubricCriterionLevelDescriptor.create.mockResolvedValue({});
+
+      const result = await service.getActiveRubricForCourse('course-1');
+
+      expect(prisma.courseRubric.create).toHaveBeenCalled();
+      expect(result.name).toBe(DEFAULT_RUBRIC_NAME);
+      expect(result.id).toBe('rubric-new');
+    });
   });
 
   describe('cloneDefaultRubricToCourse', () => {
