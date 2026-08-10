@@ -425,7 +425,7 @@ const StudentLedger = () => {
                           <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {new Date(sim.started_at).toLocaleDateString('es-AR')}</span>
                           {duration !== null && <span>{duration} min</span>}
                           <span>{sim.total_logs} eventos · {sim.messages_sent} mensajes</span>
-                          {sim.evaluator_name && <span>Evaluado por: {sim.evaluator_name}</span>}
+                          {sim.evaluator_name && <span>Evaluado por {sim.evaluator_name}</span>}
                         </div>
                       </div>
                       <div className="flex-shrink-0 mt-1 text-muted-foreground">

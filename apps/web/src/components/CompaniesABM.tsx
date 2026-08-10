@@ -59,7 +59,7 @@ const emptyCompany = (): Omit<SimulatedCompany, 'id'> => ({
 
 export function CompaniesABM() {
   const { readOnly } = useAdmin();
-  const { data: companies, total, page, totalPages, setPage, loading, error } = usePagination<SimulatedCompany>({
+  const { data: companies, total, page, totalPages, setPage, loading, error, refresh } = usePagination<SimulatedCompany>({
     endpoint: '/simulated-companies',
   });
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -96,7 +96,7 @@ export function CompaniesABM() {
       setForm(emptyCompany());
       setLogoFile(null);
       setEditingId(null);
-      setPage(page); // trigger re-fetch
+      refresh();
     } catch (e: any) { 
       const msg = e.response?.data?.message;
       toast.error(msg ? (Array.isArray(msg) ? msg.join(', ') : msg) : e.message); 
@@ -124,7 +124,7 @@ export function CompaniesABM() {
           try {
             await apiClient.delete(`/simulated-companies/${id}`);
             toast.success('Empresa eliminada');
-            setPage(page); // trigger re-fetch
+            refresh();
           } catch { toast.error('Error al eliminar'); }
         },
       },
@@ -135,7 +135,7 @@ export function CompaniesABM() {
   const handleReactivate = async (id: number) => {
     try {
       await apiClient.put(`/simulated-companies/${id}/reactivate`);
-      setPage(page); // trigger re-fetch
+      refresh();
       toast.success('Empresa reactivada');
     } catch { toast.error('Error al reactivar'); }
   };

@@ -75,7 +75,7 @@
       "^.+\\.(t|j)s$": ["ts-jest", { "diagnostics": false }]
     },
     "moduleNameMapper": {
-      "^@simuverse/shared$": "<rootDir>/../../shared/src/file-upload"
+      "^@simuverse/shared$": "<rootDir>/../shared/src/file-upload"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"

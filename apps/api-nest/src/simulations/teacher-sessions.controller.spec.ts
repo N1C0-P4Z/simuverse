@@ -1,11 +1,13 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
+import { SessionRubricReviewService } from '../rubrics/session-rubric-review.service';
 import { TeacherSessionsController } from './teacher-sessions.controller';
 
 describe('TeacherSessionsController', () => {
   let controller: TeacherSessionsController;
   let prismaMock: Record<string, any>;
+  let rubricReviewMock: Record<string, any>;
 
   const teacherUser = { id: 'teacher-1', role: 'teacher' };
   const adminUser = { id: 'admin-1', role: 'admin' };
@@ -29,10 +31,17 @@ describe('TeacherSessionsController', () => {
         findMany: jest.fn().mockResolvedValue([]),
       },
     };
+    rubricReviewMock = {
+      getReview: jest.fn(),
+      upsertReview: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [TeacherSessionsController],
-      providers: [{ provide: PrismaService, useValue: prismaMock }],
+      providers: [
+        { provide: PrismaService, useValue: prismaMock },
+        { provide: SessionRubricReviewService, useValue: rubricReviewMock },
+      ],
     }).compile();
 
     controller = module.get(TeacherSessionsController);

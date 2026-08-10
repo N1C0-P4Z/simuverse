@@ -47,7 +47,7 @@ interface User {
 }
 
 export function AssignmentsABM() {
-  const { data: assignments, total, page, totalPages, setPage, loading: assignmentsLoading } = usePagination<Assignment>({
+  const { data: assignments, total, page, totalPages, setPage, loading: assignmentsLoading, refresh } = usePagination<Assignment>({
     endpoint: '/assignments',
   });
   const [courses, setCourses] = useState<Course[]>([]);
@@ -161,7 +161,7 @@ export function AssignmentsABM() {
     }
 
     setSaving(false);
-    setPage(page);
+    refresh();
 
     if (errors === 0) {
       toast.success(`✅ ${created} asignación${created !== 1 ? 'es' : ''} creada${created !== 1 ? 's' : ''} correctamente`);
@@ -203,7 +203,7 @@ export function AssignmentsABM() {
         onClick: async () => {
           try {
             await apiClient.delete(`/assignments/${id}`);
-            setPage(page);
+            refresh();
             toast.success('Asignación eliminada');
           } catch { toast.error('Error al eliminar'); }
         },
@@ -231,7 +231,7 @@ export function AssignmentsABM() {
       });
       toast.success('Asignación actualizada');
       setEditingAssignment(null);
-      setPage(page);
+      refresh();
     } catch {
       toast.error('Error al actualizar la asignación');
     }

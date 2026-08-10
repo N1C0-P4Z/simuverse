@@ -20,6 +20,7 @@ import { FilesModule } from './files/files.module';
 import { HealthModule } from './health/health.module';
 import { TermsModule } from './terms/terms.module';
 import { SponsorsModule } from './sponsors/sponsors.module';
+import { RubricsModule } from './rubrics/rubrics.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
 @Module({
@@ -47,6 +48,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     HealthModule,
     TermsModule,
     SponsorsModule,
+    RubricsModule,
   ],
   controllers: [],
   providers: [

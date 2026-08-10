@@ -2,6 +2,6 @@
   "name": "@simuverse/shared",
   "version": "1.0.0",
   "private": true,
-  "main": "src/file-upload.ts",
-  "types": "src/file-upload.ts"
+  "main": "src/file-upload.js",
+  "types": "src/file-upload.d.ts"
 }

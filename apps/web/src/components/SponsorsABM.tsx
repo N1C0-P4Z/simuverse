@@ -50,7 +50,7 @@ function LogoDisplay({ name, logoUrl, size = 'md' }: { name: string; logoUrl?: s
 
 export function SponsorsABM() {
   const { readOnly } = useAdmin();
-  const { data: sponsors, total, page, totalPages, setPage, loading, error } = usePagination<Sponsor>({
+  const { data: sponsors, total, page, totalPages, setPage, loading, error, refresh } = usePagination<Sponsor>({
     endpoint: '/sponsors',
   });
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -86,7 +86,7 @@ export function SponsorsABM() {
       setForm(emptyForm());
       setLogoFile(null);
       setEditingId(null);
-      setPage(page); // trigger re-fetch
+      refresh();
     } catch (e: any) { toast.error(e.message); }
     setSaving(false);
   };
@@ -106,7 +106,7 @@ export function SponsorsABM() {
           try {
             await apiClient.delete(`/sponsors/${id}`);
             toast.success('Patrocinador desactivado');
-            setPage(page); // trigger re-fetch
+            refresh();
           } catch { toast.error('Error al desactivar'); }
         },
       },
@@ -117,7 +117,7 @@ export function SponsorsABM() {
   const handleReactivate = async (id: number) => {
     try {
       await apiClient.put(`/sponsors/${id}/reactivate`);
-      setPage(page); // trigger re-fetch
+      refresh();
       toast.success('Patrocinador reactivado');
     } catch { toast.error('Error al reactivar'); }
   };

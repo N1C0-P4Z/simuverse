@@ -8,7 +8,7 @@ import { API_BASE, authFetch } from '@/lib/api';
 import { useAdmin } from '@/lib/admin-context';
 import { apiClient } from '@/services/ApiClient';
 import { usePagination } from '@/hooks/usePagination';
-import { ExternalLink, FileText, Paperclip, Pencil, Plus, Trash2, Upload } from 'lucide-react';
+import { ExternalLink, FileText, Filter, Paperclip, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ALLOWED_EXTENSIONS } from '@simuverse/shared';
@@ -26,6 +26,35 @@ interface Document {
 interface Course {
   id: string;
   title: string;
+  category?: string;
+  categories?: string[];
+}
+
+interface CategoryOption {
+  id: number;
+  name: string;
+  code: string;
+}
+
+function courseMatchesCategory(
+  course: Course,
+  categoryCode: string,
+  categoryOptions: CategoryOption[],
+): boolean {
+  const selected = categoryOptions.find(
+    (c) => c.code.toLowerCase() === categoryCode.toLowerCase(),
+  );
+  const needles = new Set<string>([categoryCode.toLowerCase()]);
+  if (selected) {
+    needles.add(selected.code.toLowerCase());
+    needles.add(selected.name.toLowerCase());
+  }
+
+  const tags = [course.category, ...(course.categories ?? [])]
+    .filter(Boolean)
+    .map((tag) => String(tag).toLowerCase());
+
+  return tags.some((tag) => needles.has(tag));
 }
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
@@ -57,10 +86,11 @@ const emptyForm = {
 
 export function DocumentsABM() {
   const { readOnly } = useAdmin();
-  const { data: documents, total, page, totalPages, setPage, setExtraParams, loading } = usePagination<Document>({
+  const { data: documents, total, page, totalPages, setPage, setExtraParams, loading, refresh } = usePagination<Document>({
     endpoint: '/documents',
   });
   const [courses, setCourses] = useState<Course[]>([]);
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -68,20 +98,35 @@ export function DocumentsABM() {
 
   const [formData, setFormData] = useState({ ...emptyForm });
   const [courseFilter, setCourseFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
 
   useEffect(() => {
     fetchCourses();
+    fetchCategories();
   }, []);
-
-  const refreshList = () => setPage(page);
 
   useEffect(() => {
     const params: Record<string, unknown> = {};
     if (courseFilter) params.course_id = courseFilter;
+    if (categoryFilter) params.category = categoryFilter;
     setExtraParams(params);
-  }, [courseFilter]);
+  }, [courseFilter, categoryFilter, setExtraParams]);
 
+  const filteredCourses = categoryFilter
+    ? courses.filter((c) => courseMatchesCategory(c, categoryFilter, categories))
+    : courses;
 
+  const handleCategoryFilterChange = (value: string) => {
+    const next = value === '__all__' ? '' : value;
+    setCategoryFilter(next);
+    if (
+      next &&
+      courseFilter &&
+      !courses.some((c) => c.id === courseFilter && courseMatchesCategory(c, next, categories))
+    ) {
+      setCourseFilter('');
+    }
+  };
   const fetchCourses = async () => {
     try {
       const response = await apiClient.get('/courses/dropdown/list');
@@ -90,6 +135,17 @@ export function DocumentsABM() {
     } catch (error) {
       console.error('Error fetching courses:', error);
       setCourses([]);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const response = await apiClient.get('/categories/dropdown/list');
+      const data = response.data;
+      setCategories(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      setCategories([]);
     }
   };
 
@@ -238,7 +294,7 @@ export function DocumentsABM() {
       }
 
       resetForm();
-      refreshList();
+      refresh();
     } catch (error) {
       console.error('Error saving document:', error);
       toast.error(error instanceof Error ? error.message : 'Error al guardar el documento');
@@ -255,7 +311,7 @@ export function DocumentsABM() {
           try {
             await apiClient.delete(`/documents/${id}`);
             if (editingId === id) resetForm();
-            refreshList();
+            refresh();
             toast.success('Documento eliminado');
           } catch (error) {
             console.error('Error deleting document:', error);
@@ -270,7 +326,7 @@ export function DocumentsABM() {
   const handleReactivate = async (id: number) => {
     try {
       await apiClient.put(`/documents/${id}/reactivate`);
-      refreshList();
+      refresh();
       toast.success('Documento reactivado');
     } catch { toast.error('Error al reactivar'); }
   };
@@ -303,17 +359,34 @@ export function DocumentsABM() {
         )}
       </div>
 
-      {/* Course filter */}
+      {/* Filters */}
       {!formOpen && (
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Filter className="w-4 h-4 text-gray-500" />
+          <span className="text-sm font-medium text-gray-600">Filtrar por categoría:</span>
+          <Select value={categoryFilter || '__all__'} onValueChange={handleCategoryFilterChange}>
+            <SelectTrigger className="w-64">
+              <SelectValue placeholder="Todas las categorías" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todas las categorías</SelectItem>
+              {categories.map((cat) => (
+                <SelectItem key={cat.id} value={cat.code}>
+                  {cat.name} ({cat.code})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <span className="text-sm font-medium text-gray-600">Filtrar por curso:</span>
-          <Select value={courseFilter} onValueChange={v => setCourseFilter(v === '__all__' ? '' : v)}>
+          <Select value={courseFilter || '__all__'} onValueChange={(v) => setCourseFilter(v === '__all__' ? '' : v)}>
             <SelectTrigger className="w-64">
               <SelectValue placeholder="Todos los cursos" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">Todos los cursos</SelectItem>
-              {courses.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}
+              {filteredCourses.map((c) => (
+                <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

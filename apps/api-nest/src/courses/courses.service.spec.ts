@@ -1,10 +1,12 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { CoursesService } from './courses.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { CourseRubricService } from '../rubrics/course-rubric.service';
 
 describe('CoursesService — association sync', () => {
   let service: CoursesService;
   let prisma: any;
+  let rubricService: any;
 
   beforeEach(() => {
     prisma = {
@@ -21,9 +23,15 @@ describe('CoursesService — association sync', () => {
       enrollmentAttempt: { count: jest.fn().mockResolvedValue(0), create: jest.fn() },
       courseDocument: { deleteMany: jest.fn() },
       flowTemplate: { deleteMany: jest.fn() },
+      techSheet: { findUnique: jest.fn(), findFirst: jest.fn() },
+      techSheetCompetency: { count: jest.fn(), findMany: jest.fn() },
+      techSheetTask: { findMany: jest.fn() },
       $transaction: jest.fn((callback: any) => callback(prisma)),
     };
-    service = new CoursesService(prisma as PrismaService);
+    rubricService = {
+      cloneDefaultRubricToCourse: jest.fn().mockResolvedValue({ id: 'rubric-1' }),
+    };
+    service = new CoursesService(prisma as PrismaService, rubricService as CourseRubricService);
   });
 
   describe('create()', () => {
@@ -317,6 +325,213 @@ describe('CoursesService — association sync', () => {
         teachers: [{ id: 't1', name: 'Teacher', email: 't@t.com' }],
       });
 
+    });
+  });
+
+  describe('getLanding()', () => {
+    const baseCourse = {
+      id: 'course-1',
+      course_id: 'C1',
+      title: 'Course 1',
+      description: 'A course',
+      category: 'it',
+      categories: ['software'],
+      password_hash: 'hash',
+      tech_sheet_id: null,
+      teachers: [{ teacher: { id: 't1', name: 'Teacher', email: 't@t.com' } }],
+      course_sponsors: [
+        { sponsor: { id: 1, name: 'Active Sponsor', logo_url: '/logo.png', website: 'https://s.com', is_active: true } },
+        { sponsor: { id: 2, name: 'Inactive Sponsor', logo_url: null, website: null, is_active: false } },
+      ],
+      course_endorsers: [
+        { endorser: { id: 10, name: 'Active Endorser', short_name: 'AE', logo_url: '/e.png', website: 'https://e.com', is_active: true } },
+        { endorser: { id: 11, name: 'Inactive Endorser', short_name: 'IE', logo_url: null, website: null, is_active: false } },
+      ],
+    };
+
+    beforeEach(() => {
+      prisma.course.findUnique.mockImplementation(({ where }: any) =>
+        Promise.resolve(
+          where.id === 'course-1' || where.course_id === 'C1' ? baseCourse : null,
+        ),
+      );
+      prisma.simulationAssignment.findFirst.mockResolvedValue(null);
+      prisma.techSheet.findUnique.mockResolvedValue(null);
+      prisma.techSheet.findFirst.mockResolvedValue(null);
+      prisma.techSheetCompetency.count.mockResolvedValue(0);
+      prisma.techSheetCompetency.findMany.mockResolvedValue([]);
+      prisma.techSheetTask.findMany.mockResolvedValue([]);
+    });
+
+    it('throws NotFoundException when course is missing', async () => {
+      prisma.course.findUnique.mockResolvedValue(null);
+
+      await expect(service.getLanding('missing', 'user-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('returns landing without tech sheet when none linked', async () => {
+      const result = await service.getLanding('course-1', 'user-1');
+
+      expect(result.id).toBe('course-1');
+      expect(result.course_id).toBe('C1');
+      expect(result.tags).toEqual(['it', 'software']);
+      expect(result.requires_password).toBe(true);
+      expect(result.is_enrolled).toBe(false);
+      expect(result.tech_sheet).toBeNull();
+      expect(result.teachers).toEqual([{ id: 't1', name: 'Teacher', email: 't@t.com' }]);
+    });
+
+    it('returns is_enrolled true when assignment exists', async () => {
+      prisma.simulationAssignment.findFirst.mockResolvedValue({ id: 'assign-1' });
+
+      const result = await service.getLanding('course-1', 'user-1');
+
+      expect(result.is_enrolled).toBe(true);
+      expect(prisma.simulationAssignment.findFirst).toHaveBeenCalledWith({
+        where: { student_id: 'user-1', course_id: 'course-1' },
+      });
+    });
+
+    it('filters inactive sponsors and endorsers', async () => {
+      const result = await service.getLanding('course-1', 'user-1');
+
+      expect(result.sponsors).toEqual([
+        { id: 1, name: 'Active Sponsor', logo_url: '/logo.png', website: 'https://s.com' },
+      ]);
+      expect(result.endorsers).toEqual([
+        { id: 10, name: 'Active Endorser', short_name: 'AE', logo_url: '/e.png', website: 'https://e.com' },
+      ]);
+    });
+
+    it('returns tech_sheet null when sheet has no analyzed data', async () => {
+      prisma.techSheet.findFirst.mockResolvedValue({
+        id: 5,
+        name: 'Sheet',
+        extracted_data: null,
+        pipeline_output: null,
+        pipeline_status: null,
+        processed: false,
+      });
+      prisma.techSheetCompetency.count.mockResolvedValue(0);
+
+      const result = await service.getLanding('course-1', 'user-1');
+
+      expect(result.tech_sheet).toBeNull();
+    });
+
+    it('returns tech_sheet with relational competencies and tasks', async () => {
+      prisma.techSheet.findFirst.mockResolvedValue({
+        id: 5,
+        name: 'Ministry Sheet',
+        extracted_data: null,
+        pipeline_output: {
+          step_8_emails: [{ subject: 'Hi' }],
+          step_9_spreadsheet: { columnas: [] },
+          step_10_crisis: [],
+        },
+        pipeline_status: 'completed',
+        processed: true,
+      });
+      prisma.techSheetCompetency.count.mockResolvedValue(2);
+      prisma.techSheetCompetency.findMany.mockResolvedValue([
+        { name: 'Comp A', description: 'Desc A', level: 'basic' },
+        { name: 'Comp B', description: null, level: 'advanced' },
+      ]);
+      prisma.techSheetTask.findMany.mockResolvedValue([
+        {
+          title: 'Task 1',
+          description: 'Do it',
+          difficulty: 'low',
+          sequence: 1,
+          expected_duration_minutes: 30,
+        },
+      ]);
+
+      const result = await service.getLanding('course-1', 'user-1');
+
+      expect(result.tech_sheet).toEqual({
+        id: 5,
+        name: 'Ministry Sheet',
+        analyzed: true,
+        competencies: [
+          { name: 'Comp A', description: 'Desc A', level: 'basic' },
+          { name: 'Comp B', description: null, level: 'advanced' },
+        ],
+        tasks: [
+          {
+            title: 'Task 1',
+            description: 'Do it',
+            difficulty: 'low',
+            sequence: 1,
+            expected_duration_minutes: 30,
+          },
+        ],
+        content: {
+          emails: [{ subject: 'Hi' }],
+          spreadsheet: { columnas: [] },
+          crisis: [],
+        },
+      });
+    });
+
+    it('falls back to analyzed_config when no relational competencies', async () => {
+      prisma.techSheet.findFirst.mockResolvedValue({
+        id: 7,
+        name: 'Legacy Sheet',
+        extracted_data: {
+          analyzed_config: {
+            competencies: [{ name: 'Legacy Comp', description: 'L', level: 'intermediate' }],
+            questions: [{ titulo: 'Q1', descripcion: 'D1', dificultad: 'baja' }],
+          },
+        },
+        pipeline_output: null,
+        pipeline_status: null,
+        processed: false,
+      });
+      prisma.techSheetCompetency.count.mockResolvedValue(0);
+
+      const result = await service.getLanding('course-1', 'user-1');
+
+      expect(result.tech_sheet?.analyzed).toBe(true);
+      expect(result.tech_sheet?.competencies).toEqual([
+        { name: 'Legacy Comp', description: 'L', level: 'intermediate' },
+      ]);
+      expect(result.tech_sheet?.tasks).toEqual([
+        {
+          title: 'Q1',
+          description: 'D1',
+          difficulty: 'low',
+          sequence: 1,
+          expected_duration_minutes: 0,
+        },
+      ]);
+      expect(result.tech_sheet?.content).toEqual({
+        emails: [],
+        spreadsheet: null,
+        crisis: [],
+      });
+    });
+
+    it('prefers course.tech_sheet_id over findFirst by course_id', async () => {
+      const linkedCourse = { ...baseCourse, tech_sheet_id: 99 };
+      prisma.course.findUnique.mockImplementation(({ where }: any) =>
+        Promise.resolve(
+          where.id === 'course-1' || where.course_id === 'C1' ? linkedCourse : null,
+        ),
+      );
+      prisma.techSheet.findUnique.mockResolvedValue({
+        id: 99,
+        name: 'Linked Sheet',
+        extracted_data: { analyzed_config: { competencies: [{ name: 'X' }] } },
+        pipeline_output: null,
+        pipeline_status: null,
+        processed: false,
+      });
+
+      await service.getLanding('course-1', 'user-1');
+
+      expect(prisma.techSheet.findUnique).toHaveBeenCalledWith({ where: { id: 99 } });
+      expect(prisma.techSheet.findFirst).not.toHaveBeenCalled();
     });
   });
 });

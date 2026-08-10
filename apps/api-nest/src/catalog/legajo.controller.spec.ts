@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { LegajoController } from './missing-controllers';
 import { PrismaService } from '../prisma/prisma.service';
@@ -17,6 +17,7 @@ describe('LegajoController — query param filters', () => {
     prismaMock = {
       user: {
         findMany: jest.fn().mockResolvedValue(students),
+        count: jest.fn().mockResolvedValue(students.length),
       },
       courseTeacher: {
         findMany: jest.fn().mockResolvedValue([]),
@@ -32,6 +33,9 @@ describe('LegajoController — query param filters', () => {
     }).compile();
 
     app = module.createNestApplication();
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
     await app.init();
   });
 
@@ -42,7 +46,7 @@ describe('LegajoController — query param filters', () => {
   it('returns all students when no query params provided', async () => {
     const res = await request(app.getHttpServer()).get('/legajo/students');
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(2);
+    expect(res.body.data).toHaveLength(2);
     expect(prismaMock.user.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { role: 'student' },

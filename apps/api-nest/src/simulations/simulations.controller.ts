@@ -128,6 +128,7 @@ export class SimulationsController {
   async complete(@Param('id') id: string, @CurrentUser('id') userId: string) {
     const instance = await this.prisma.simulationInstance.findUnique({ where: { id } });
     if (instance) {
+      // Human rubric reviews replace auto AI SimulationEvaluation writes.
       return this.practices.completePractice(userId, id);
     }
     await this.checkpoint.checkpointAndClose(id);

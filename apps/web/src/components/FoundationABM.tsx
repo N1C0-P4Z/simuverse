@@ -56,7 +56,7 @@ const emptyForm = (): Omit<FoundationConfig, 'id' | 'is_active'> => ({
 
 export function FoundationABM() {
   const { readOnly } = useAdmin();
-  const { data: foundations, total, page, totalPages, setPage, loading, error } = usePagination<FoundationConfig>({
+  const { data: foundations, total, page, totalPages, setPage, loading, error, refresh } = usePagination<FoundationConfig>({
     endpoint: '/foundation-config',
   });
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -92,7 +92,7 @@ export function FoundationABM() {
       setForm(emptyForm());
       setLogoFile(null);
       setEditingId(null);
-      setPage(page); // trigger re-fetch
+      refresh();
     } catch (e: any) { toast.error(e?.response?.data?.message || 'Error al guardar'); }
     setSaving(false);
   };
@@ -112,7 +112,7 @@ export function FoundationABM() {
   const handleDeactivate = async (id: number) => {
     try {
       await apiClient.delete(`/foundation-config/${id}`);
-      setPage(page); // trigger re-fetch
+      refresh();
       toast.success('Institución desactivada');
     } catch { toast.error('Error al desactivar'); }
   };
@@ -120,7 +120,7 @@ export function FoundationABM() {
   const handleReactivate = async (id: number) => {
     try {
       await apiClient.put(`/foundation-config/${id}/reactivate`);
-      setPage(page); // trigger re-fetch
+      refresh();
       toast.success('Institución reactivada');
     } catch { toast.error('Error al reactivar'); }
   };

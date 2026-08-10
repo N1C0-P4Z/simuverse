@@ -8,6 +8,13 @@ describe('DocumentsService', () => {
 
   beforeEach(() => {
     prisma = {
+      category: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      course: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
       courseDocument: {
         findMany: jest.fn(),
         findUnique: jest.fn(),
@@ -53,17 +60,129 @@ describe('DocumentsService', () => {
     });
 
     it('filters by courseId when provided', async () => {
+      prisma.course.findFirst.mockResolvedValue({ id: 'uuid-1', course_id: 'legacy-1' });
       prisma.courseDocument.findMany.mockResolvedValue([]);
       prisma.courseDocument.count.mockResolvedValue(0);
 
-      await service.findAll('course-1');
+      await service.findAll('legacy-1');
 
+      expect(prisma.course.findFirst).toHaveBeenCalledWith({
+        where: { OR: [{ id: 'legacy-1' }, { course_id: 'legacy-1' }] },
+        select: { id: true, course_id: true },
+      });
       expect(prisma.courseDocument.findMany).toHaveBeenCalledWith({
-        where: { course_id: 'course-1' },
+        where: { course_id: { in: ['uuid-1', 'legacy-1'] } },
         skip: 0,
         take: 20,
         orderBy: { created_at: 'desc' },
       });
+    });
+
+    it('filters by courseId alone when course row not found', async () => {
+      prisma.course.findFirst.mockResolvedValue(null);
+      prisma.courseDocument.findMany.mockResolvedValue([]);
+      prisma.courseDocument.count.mockResolvedValue(0);
+
+      await service.findAll('unknown-id');
+
+      expect(prisma.courseDocument.findMany).toHaveBeenCalledWith({
+        where: { course_id: { in: ['unknown-id'] } },
+        skip: 0,
+        take: 20,
+        orderBy: { created_at: 'desc' },
+      });
+    });
+
+    it('filters by category only via matching course ids', async () => {
+      prisma.course.findMany.mockResolvedValue([
+        { id: 'course-a', course_id: 'legacy-a', category: 'ADM', categories: null },
+        { id: 'course-b', course_id: 'legacy-b', category: 'rrhh', categories: ['ADM'] },
+        { id: 'course-c', course_id: 'legacy-c', category: 'it', categories: null },
+      ]);
+      prisma.courseDocument.findMany.mockResolvedValue([]);
+      prisma.courseDocument.count.mockResolvedValue(0);
+
+      await service.findAll(undefined, { category: 'adm' });
+
+      expect(prisma.course.findMany).toHaveBeenCalled();
+      expect(prisma.courseDocument.findMany).toHaveBeenCalledWith({
+        where: {
+          course_id: {
+            in: expect.arrayContaining(['course-a', 'legacy-a', 'course-b', 'legacy-b']),
+          },
+        },
+        skip: 0,
+        take: 20,
+        orderBy: { created_at: 'desc' },
+      });
+      const call = prisma.courseDocument.findMany.mock.calls[0][0];
+      expect(call.where.course_id.in).toHaveLength(4);
+    });
+
+    it('matches category code ADM against course category name administracion via Category row', async () => {
+      prisma.category.findFirst.mockResolvedValue({ code: 'ADM', name: 'administracion' });
+      prisma.course.findMany.mockResolvedValue([
+        { id: 'uuid-1', course_id: 'legacy-1', category: 'administracion', categories: null },
+        { id: 'uuid-2', course_id: 'legacy-2', category: 'it', categories: null },
+      ]);
+      prisma.courseDocument.findMany.mockResolvedValue([{ id: 1 }]);
+      prisma.courseDocument.count.mockResolvedValue(1);
+
+      await service.findAll(undefined, { category: 'ADM' });
+
+      expect(prisma.category.findFirst).toHaveBeenCalled();
+      expect(prisma.courseDocument.findMany).toHaveBeenCalledWith({
+        where: { course_id: { in: expect.arrayContaining(['uuid-1', 'legacy-1']) } },
+        skip: 0,
+        take: 20,
+        orderBy: { created_at: 'desc' },
+      });
+      const call = prisma.courseDocument.findMany.mock.calls[0][0];
+      expect(call.where.course_id.in).toHaveLength(2);
+    });
+
+    it('filters by both courseId and category', async () => {
+      prisma.course.findMany.mockResolvedValue([
+        { id: 'course-1', course_id: 'legacy-1', category: 'ADM', categories: null },
+      ]);
+      prisma.courseDocument.findMany.mockResolvedValue([]);
+      prisma.courseDocument.count.mockResolvedValue(0);
+
+      await service.findAll('course-1', { category: 'ADM' });
+
+      expect(prisma.course.findMany).toHaveBeenCalledWith({
+        where: { OR: [{ id: 'course-1' }, { course_id: 'course-1' }] },
+        select: { id: true, course_id: true, category: true, categories: true },
+      });
+      expect(prisma.courseDocument.findMany).toHaveBeenCalledWith({
+        where: { course_id: { in: expect.arrayContaining(['course-1', 'legacy-1']) } },
+        skip: 0,
+        take: 20,
+        orderBy: { created_at: 'desc' },
+      });
+    });
+
+    it('returns empty paginated result when category matches no courses', async () => {
+      prisma.category.findFirst.mockResolvedValue({ code: 'ADM', name: 'administracion' });
+      prisma.course.findMany.mockResolvedValue([
+        { id: 'course-1', course_id: 'legacy-1', category: 'it', categories: null },
+      ]);
+
+      const result = await service.findAll(undefined, { category: 'ADM' });
+
+      expect(result).toEqual({ data: [], total: 0, page: 1, limit: 20 });
+      expect(prisma.courseDocument.findMany).not.toHaveBeenCalled();
+    });
+
+    it('returns empty paginated result when courseId does not match category', async () => {
+      prisma.course.findMany.mockResolvedValue([
+        { id: 'course-1', course_id: 'legacy-1', category: 'it', categories: null },
+      ]);
+
+      const result = await service.findAll('course-1', { category: 'ADM' });
+
+      expect(result).toEqual({ data: [], total: 0, page: 1, limit: 20 });
+      expect(prisma.courseDocument.findMany).not.toHaveBeenCalled();
     });
   });
 

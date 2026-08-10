@@ -20,7 +20,7 @@ interface Course {
 }
 
 export function TechSheetsABM() {
-  const { data: sheets, total, page, totalPages, setPage, loading } = usePagination<TechSheet>({
+  const { data: sheets, total, page, totalPages, setPage, loading, refresh } = usePagination<TechSheet>({
     endpoint: '/tech-sheets',
   });
   const [courses, setCourses] = useState<Course[]>([]);
@@ -35,15 +35,13 @@ export function TechSheetsABM() {
   const { status: pollStatus, output: pollOutput, isLoading: pollLoading, error: pollError } =
     useAnalysisProgress(analyzingSheetId, analyzingSheetId !== null);
 
-  const refreshList = () => setPage(page);
-
   useEffect(() => {
     fetchCourses();
   }, []);
 
   useEffect(() => {
     if (pollStatus === 'completed') {
-      refreshList();
+      refresh();
       setAnalyzingSheetId(null);
       toast.success('Analisis completado exitosamente');
     } else if (pollStatus === 'failed' || pollStatus === 'validation_rejected') {
@@ -130,7 +128,7 @@ export function TechSheetsABM() {
             await authFetch(`${API_BASE}/tech-sheets/${id}`, {
               method: 'DELETE',
             });
-            refreshList();
+            refresh();
             toast.success('Ficha tecnica eliminada');
           } catch (error) {
             console.error('Error deleting tech sheet:', error);
@@ -192,7 +190,7 @@ export function TechSheetsABM() {
       setEditingSheetId(null);
       setEditingCompetencies('');
       setEditingKpis('');
-      refreshList();
+      refresh();
       toast.success('Ficha tecnica completada exitosamente.');
     } catch (error) {
       console.error('Error updating tech sheet:', error);
@@ -228,7 +226,7 @@ export function TechSheetsABM() {
         </div>
       </Card>
 
-      <TechSheetForm courses={courses} onSubmit={refreshList} />
+      <TechSheetForm courses={courses} onSubmit={refresh} />
 
       <div className="grid grid-cols-1 gap-4">
         {sheets.map((sheet) => (

@@ -34,6 +34,15 @@ const ROLE_LABELS: Record<string, string> = {
   ministerio: 'Ministerio',
 };
 
+/** Admin-nav item id → teacher-facing route under /profesor */
+const TEACHER_ADMIN_ITEM_ROUTES: Record<string, string> = {
+  reports: '/profesor/reportes',
+  sessions: '/profesor/sesiones',
+  courses: '/profesor/cursos',
+  assignments: '/profesor/cursos',
+  legajos: '/profesor/legajos',
+};
+
 export function AppSidebar() {
   const { user, signOut, loading } = useAuth();
   const router = useRouter();
@@ -248,9 +257,18 @@ export function AppSidebar() {
                       {group.items.map((item) => (
                         <SidebarMenuItem key={item.id} className="group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">
                           <SidebarMenuButton
-                            isActive={pathname === `/admin/${item.id}` || (pathname === adminPath && currentTab === item.id)}
+                            isActive={
+                              pathname === `/admin/${item.id}` ||
+                              pathname === TEACHER_ADMIN_ITEM_ROUTES[item.id] ||
+                              (pathname === adminPath && currentTab === item.id)
+                            }
                             onClick={() => {
                               setCurrentTab(item.id);
+                              const teacherRoute = TEACHER_ADMIN_ITEM_ROUTES[item.id];
+                              if (role === 'teacher' && teacherRoute) {
+                                router.push(teacherRoute);
+                                return;
+                              }
                               router.push(`/admin/${item.id}`);
                             }}
                             tooltip={item.label}
