@@ -6,12 +6,14 @@ import { RbacService } from '../rbac/rbac.service';
 
 describe('DocumentsController — RBAC Phase A', () => {
   let controller: DocumentsController;
+  let documentsService: { findAll: jest.Mock };
 
   beforeEach(async () => {
+    documentsService = { findAll: jest.fn() };
     const module: TestingModule = await Test.createTestingModule({
       controllers: [DocumentsController],
       providers: [
-        { provide: DocumentsService, useValue: {} },
+        { provide: DocumentsService, useValue: documentsService },
         { provide: RbacService, useValue: {} },
       ],
     }).compile();
@@ -23,6 +25,25 @@ describe('DocumentsController — RBAC Phase A', () => {
     it('has roles admin and teacher', () => {
       const roles = Reflect.getMetadata(ROLES_KEY, DocumentsController);
       expect(roles).toEqual(['admin', 'teacher']);
+    });
+  });
+
+  describe('findAll', () => {
+    it('forwards course_id, category, page and limit to service', async () => {
+      documentsService.findAll.mockResolvedValue({ data: [], total: 0, page: 2, limit: 10 });
+
+      await controller.findAll({
+        course_id: 'course-1',
+        category: 'ADM',
+        page: 2,
+        limit: 10,
+      });
+
+      expect(documentsService.findAll).toHaveBeenCalledWith('course-1', {
+        category: 'ADM',
+        page: 2,
+        limit: 10,
+      });
     });
   });
 
