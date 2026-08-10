@@ -43,6 +43,8 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
       FIREBASE_SERVICE_ACCOUNT_PATH: /run/secrets/firebase-service-account.json
+      RUN_SEEDS: ${RUN_SEEDS:-false}
+      SEED_SUITE: prod
     volumes:
       - ./secrets/firebase-service-account.json:/run/secrets/firebase-service-account.json:ro
     depends_on:
@@ -67,17 +69,12 @@ services:
             exit 1
           }
         }
-        echo '=== Seed 1/5: usuarios ==='
-        npx ts-node src/prisma/seed.ts
-        echo '=== Seed 2/5: empresas y cursos ==='
-        npx ts-node src/prisma/seed-companies.ts
-        echo '=== Seed 3/5: fundacion + avaladores + KPIs ==='
-        npx ts-node src/prisma/seed-demo.ts
-        echo '=== Seed 4/5: asignaciones + archivos ==='
-        npx ts-node src/prisma/seed-demo-2.ts
-        echo '=== Seed 5/5: ministry requirements extra ==='
-        npx ts-node src/prisma/seed-demo-3.ts
-        echo '=== All seeds completed ==='
+        echo '=== Seed gate (RUN_SEEDS='"${RUN_SEEDS:-false}"') ==='
+        sh scripts/run-seeds-if-needed.sh || {
+          echo '=== Seed gate FAILED ==='
+          exit 1
+        }
+        echo '=== Seed step completed (ran or skipped) ==='
       "
     networks:
       - app-network

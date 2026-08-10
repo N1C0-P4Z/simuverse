@@ -74,7 +74,7 @@ async function main() {
     for (const func of allFuncs) {
       await prisma.rolePermission.upsert({
         where: { role_name_functionality_id: { role_name: role.name, functionality_id: func.id } },
-        update: { enabled: role.name === 'admin' }, // admin tiene true, otros false por ahora
+        update: {}, // no sobrescribir enabled en filas existentes (RBAC customizado)
         create: { role_name: role.name, functionality_id: func.id, enabled: role.name === 'admin' },
       });
     }

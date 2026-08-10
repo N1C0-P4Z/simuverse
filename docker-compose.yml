@@ -61,6 +61,7 @@ services:
       DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-flash}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-gpt-4o-mini}
+      RUN_SEEDS: ${RUN_SEEDS:-false}
     ports:
       - "${PUERTO_BACKEND_INTERNAL:-5002}:5001"
     volumes:
