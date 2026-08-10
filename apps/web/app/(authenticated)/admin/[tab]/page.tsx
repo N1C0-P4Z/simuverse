@@ -1,9 +1,9 @@
 'use client'
-import AdminPanel from '@/views/AdminPanel';
+import AdminPanel from '@/views/AdminPanel'
+import { useParams } from 'next/navigation'
 
-import { use } from 'react';
-
-export default function AdminTabPage({ params }: { params: Promise<{ tab: string }> }) {
-  const resolvedParams = use(params);
-  return <AdminPanel tabId={resolvedParams.tab} />;
+export default function AdminTabPage() {
+  const params = useParams()
+  const tab = typeof params?.tab === 'string' ? params.tab : undefined
+  return <AdminPanel tabId={tab} />
 }

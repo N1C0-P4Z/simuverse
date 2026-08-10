@@ -11,6 +11,8 @@ import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { paginate, PaginatedResult } from '../common/helpers/paginate';
+import { CourseRubricService } from '../rubrics/course-rubric.service';
 
 const ENROLL_MAX_ATTEMPTS = 5;
 const ENROLL_WINDOW_MS = 15 * 60 * 1000;
@@ -31,7 +33,10 @@ interface CourseAssociationIds {
 
 @Injectable()
 export class CoursesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private rubricService: CourseRubricService,
+  ) {}
 
   private stripPassword<T extends { password_hash?: string | null }>(
     course: T,
@@ -56,18 +61,38 @@ export class CoursesService {
     return out;
   }
 
-  async findAll(isActive?: boolean) {
+  private courseListInclude = {
+    teachers: {
+      include: {
+        teacher: { select: { id: true, name: true, email: true } },
+      },
+    },
+    ...COURSE_ASSOCIATIONS_INCLUDE,
+  };
+
+  async findAll(opts?: { page?: number; limit?: number; isActive?: boolean }): Promise<PaginatedResult<any>> {
+    const { page = 1, limit = 20, isActive } = opts || {};
     const where = isActive !== undefined ? { is_active: isActive } : {};
+    const result = await paginate(this.prisma.course, where, {
+      page,
+      limit,
+      orderBy: { created_at: 'desc' },
+      include: this.courseListInclude,
+    });
+    return {
+      ...result,
+      data: result.data.map((c) => this.stripPassword(c)),
+    };
+  }
+
+  async findAllDropdown(isActive?: boolean, teacherId?: string) {
+    const where: any = isActive !== undefined ? { is_active: isActive } : {};
+    if (teacherId) {
+      where.teachers = { some: { teacher_id: teacherId } };
+    }
     const courses = await this.prisma.course.findMany({
       where,
-      include: {
-        teachers: {
-          include: {
-            teacher: { select: { id: true, name: true, email: true } },
-          },
-        },
-        ...COURSE_ASSOCIATIONS_INCLUDE,
-      },
+      include: this.courseListInclude,
       orderBy: { created_at: 'desc' },
     });
     return courses.map((c) => this.stripPassword(c));
@@ -113,44 +138,62 @@ export class CoursesService {
   async catalog(opts: { q?: string; tag?: string; page?: number; limit?: number } = {}) {
     const page = Math.max(1, opts.page ?? 1);
     const limit = Math.min(100, Math.max(1, opts.limit ?? 20));
+    const skip = (page - 1) * limit;
 
-    const courses = await this.prisma.course.findMany({
-      where: { is_active: true },
-      include: {
-        teachers: {
-          include: {
-            teacher: { select: { id: true, name: true, email: true } },
+    const needle = (opts.q || '').trim().toLowerCase();
+    const tag = (opts.tag || '').trim().toLowerCase();
+
+    // Build Prisma where clause
+    const where: any = { is_active: true };
+
+    if (needle) {
+      where.OR = [
+        { title: { contains: needle, mode: 'insensitive' } },
+        { category: { contains: needle, mode: 'insensitive' } },
+        {
+          teachers: {
+            some: {
+              teacher: {
+                OR: [
+                  { name: { contains: needle, mode: 'insensitive' } },
+                  { email: { contains: needle, mode: 'insensitive' } },
+                ],
+              },
+            },
           },
         },
-      },
-      orderBy: { title: 'asc' },
-    });
+      ];
+    }
+
+    if (tag) {
+      // Filter by the main category field (exact match, case-insensitive)
+      where.category = { equals: tag, mode: 'insensitive' };
+    }
+
+    const [courses, total] = await Promise.all([
+      this.prisma.course.findMany({
+        where,
+        include: {
+          teachers: {
+            include: {
+              teacher: { select: { id: true, name: true, email: true } },
+            },
+          },
+        },
+        orderBy: { title: 'asc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.course.count({ where }),
+    ]);
 
     const courseTags = (c: (typeof courses)[number]): string[] => {
       const cats = Array.isArray(c.categories) ? (c.categories as string[]) : [];
       return [c.category, ...cats].filter(Boolean).map((t) => String(t));
     };
 
-    const needle = (opts.q || '').trim().toLowerCase();
-    const tag = (opts.tag || '').trim().toLowerCase();
-    const filtered = courses.filter((c) => {
-      const matchesNeedle =
-        !needle ||
-        c.title.toLowerCase().includes(needle) ||
-        c.teachers.some(
-          (t) =>
-            t.teacher.name.toLowerCase().includes(needle) ||
-            t.teacher.email.toLowerCase().includes(needle),
-        );
-      const matchesTag = !tag || courseTags(c).some((t) => t.toLowerCase() === tag);
-      return matchesNeedle && matchesTag;
-    });
-
-    const total = filtered.length;
-    const paged = filtered.slice((page - 1) * limit, page * limit);
-
     return {
-      data: paged.map((c) => ({
+      data: courses.map((c) => ({
         id: c.id,
         course_id: c.course_id,
         title: c.title,
@@ -263,6 +306,8 @@ export class CoursesService {
     if (data.teacher_ids?.length) {
       await this.setTeachers(course.id, data.teacher_ids);
     }
+
+    await this.rubricService.cloneDefaultRubricToCourse(course.id);
 
     const full = await this.findById(course.id);
     return data.password ? { ...full, password_plain: data.password } : full;
@@ -422,6 +467,14 @@ export class CoursesService {
       throw new NotFoundException('Course not found');
     }
 
+    // Check duplicate enrollment BEFORE rate-limit counting
+    const existingAssignment = await this.prisma.simulationAssignment.findFirst({
+      where: { student_id: studentId, course_id: course.id },
+    });
+    if (existingAssignment) {
+      throw new ConflictException('Ya estás inscrito');
+    }
+
     const since = new Date(Date.now() - ENROLL_WINDOW_MS);
     const recentFails = await this.prisma.enrollmentAttempt.count({
       where: {
@@ -436,13 +489,6 @@ export class CoursesService {
         'Too many enrollment attempts. Try again later.',
         HttpStatus.TOO_MANY_REQUESTS,
       );
-    }
-
-    const existing = await this.prisma.simulationAssignment.findFirst({
-      where: { student_id: studentId, course_id: course.id },
-    });
-    if (existing) {
-      return existing;
     }
 
     if (course.password_hash) {
@@ -529,6 +575,261 @@ export class CoursesService {
 
       return tx.course.delete({ where: { id } });
     });
+  }
+
+  async getLanding(courseId: string, userId: string) {
+    const include = {
+      teachers: {
+        include: {
+          teacher: { select: { id: true, name: true, email: true } },
+        },
+      },
+      course_sponsors: { include: { sponsor: true } },
+      course_endorsers: { include: { endorser: true } },
+    };
+
+    let course = await this.prisma.course.findUnique({ where: { id: courseId }, include });
+    if (!course) {
+      course = await this.prisma.course.findUnique({ where: { course_id: courseId }, include });
+    }
+    if (!course) {
+      throw new NotFoundException('Course not found');
+    }
+
+    const assignment = await this.prisma.simulationAssignment.findFirst({
+      where: { student_id: userId, course_id: course.id },
+    });
+
+    const sheet = await this.resolveLandingTechSheet(course);
+    const tech_sheet = sheet ? await this.buildLandingTechSheet(sheet) : null;
+
+    const cats = Array.isArray(course.categories) ? (course.categories as string[]) : [];
+    const tags = [course.category, ...cats].filter(Boolean).map((t) => String(t));
+
+    return {
+      id: course.id,
+      course_id: course.course_id,
+      title: course.title,
+      description: course.description,
+      category: course.category,
+      tags,
+      requires_password: !!course.password_hash,
+      is_enrolled: !!assignment,
+      teachers: course.teachers.map((t) => ({
+        id: t.teacher.id,
+        name: t.teacher.name,
+        email: t.teacher.email,
+      })),
+      sponsors: course.course_sponsors
+        .map((cs) => cs.sponsor)
+        .filter((s) => s && s.is_active)
+        .map((s) => ({
+          id: s.id,
+          name: s.name,
+          logo_url: s.logo_url,
+          website: s.website,
+        })),
+      endorsers: course.course_endorsers
+        .map((ce) => ce.endorser)
+        .filter((e) => e && e.is_active)
+        .map((e) => ({
+          id: e.id,
+          name: e.name,
+          short_name: e.short_name,
+          logo_url: e.logo_url,
+          website: e.website,
+        })),
+      tech_sheet,
+    };
+  }
+
+  private async resolveLandingTechSheet(course: { id: string; tech_sheet_id?: number | null }) {
+    if (course.tech_sheet_id) {
+      const linked = await this.prisma.techSheet.findUnique({
+        where: { id: course.tech_sheet_id },
+      });
+      if (linked) return linked;
+    }
+    return this.prisma.techSheet.findFirst({ where: { course_id: course.id } });
+  }
+
+  private async buildLandingTechSheet(sheet: {
+    id: number;
+    name: string;
+    extracted_data?: unknown;
+    pipeline_output?: unknown;
+    pipeline_status?: string | null;
+    processed?: boolean;
+  }) {
+    const compCount = await (this.prisma as any).techSheetCompetency.count({
+      where: { tech_sheet_id: sheet.id },
+    });
+    const extractedData = sheet.extracted_data as Record<string, any> | null;
+    const analyzedConfig = extractedData?.analyzed_config;
+
+    if (compCount === 0 && !analyzedConfig) {
+      return null;
+    }
+
+    let competencies: Array<{ name: string; description: string | null; level: string }> = [];
+    let tasks: Array<{
+      title: string;
+      description: string | null;
+      difficulty: string;
+      sequence: number;
+      expected_duration_minutes: number;
+    }> = [];
+
+    if (compCount > 0) {
+      const compRows = await (this.prisma as any).techSheetCompetency.findMany({
+        where: { tech_sheet_id: sheet.id },
+        orderBy: { created_at: 'asc' },
+      });
+      competencies = compRows.map((c: any) => ({
+        name: c.name,
+        description: c.description,
+        level: c.level,
+      }));
+
+      const taskRows = await (this.prisma as any).techSheetTask.findMany({
+        where: { tech_sheet_id: sheet.id },
+        orderBy: { sequence: 'asc' },
+      });
+      tasks = taskRows.map((t: any) => ({
+        title: t.title,
+        description: t.description,
+        difficulty: t.difficulty,
+        sequence: t.sequence,
+        expected_duration_minutes: t.expected_duration_minutes,
+      }));
+    } else if (analyzedConfig) {
+      competencies = this.parseLandingCompetencies(analyzedConfig.competencies);
+      tasks = this.parseLandingTasks(analyzedConfig.questions);
+    }
+
+    const po = (sheet.pipeline_output || {}) as Record<string, any>;
+    const content = {
+      emails: po.step_8_emails ?? [],
+      spreadsheet: po.step_9_spreadsheet ?? null,
+      crisis: po.step_10_crisis ?? [],
+    };
+
+    const hasContent =
+      content.emails.length > 0 ||
+      content.spreadsheet != null ||
+      content.crisis.length > 0;
+
+    const analyzed =
+      competencies.length > 0 ||
+      tasks.length > 0 ||
+      hasContent ||
+      sheet.pipeline_status === 'completed' ||
+      sheet.processed === true;
+
+    return {
+      id: sheet.id,
+      name: sheet.name,
+      analyzed,
+      competencies,
+      tasks,
+      content,
+    };
+  }
+
+  private parseLandingCompetencies(raw: unknown): Array<{
+    name: string;
+    description: string;
+    level: string;
+  }> {
+    const parsed = this.safeParseLandingJson(raw);
+    if (!parsed) return [];
+
+    const items = Array.isArray(parsed)
+      ? parsed
+      : parsed.competencias || parsed.competencies || [];
+    if (!Array.isArray(items)) return [];
+
+    return items.map((c: any) => ({
+      name: c.nombre || c.name || '',
+      description: c.descripcion || c.description || '',
+      level: this.mapLandingLevel(c.nivel || c.level),
+    }));
+  }
+
+  private parseLandingTasks(raw: unknown): Array<{
+    title: string;
+    description: string;
+    difficulty: string;
+    sequence: number;
+    expected_duration_minutes: number;
+  }> {
+    const parsed = this.safeParseLandingJson(raw);
+    if (!parsed) return [];
+
+    const items = Array.isArray(parsed)
+      ? parsed
+      : parsed.preguntas || parsed.questions || [];
+    if (!Array.isArray(items)) return [];
+
+    return items.map((q: any, i: number) => ({
+      title: q.texto || q.text || q.titulo || '',
+      description: q.descripcion || q.description || '',
+      difficulty: this.mapLandingDifficulty(q.dificultad || q.difficulty),
+      sequence: i + 1,
+      expected_duration_minutes: 0,
+    }));
+  }
+
+  private safeParseLandingJson(value: unknown): any {
+    if (!value) return null;
+    if (typeof value === 'string') {
+      let cleaned = value.trim();
+      cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, '');
+      cleaned = cleaned.replace(/\n?\s*```$/, '');
+      try {
+        return JSON.parse(cleaned);
+      } catch {
+        return null;
+      }
+    }
+    return value;
+  }
+
+  private mapLandingLevel(raw: string): string {
+    const map: Record<string, string> = {
+      basico: 'basic',
+      basica: 'basic',
+      intermedio: 'intermediate',
+      intermedia: 'intermediate',
+      avanzado: 'advanced',
+      avanzada: 'advanced',
+      basic: 'basic',
+      intermediate: 'intermediate',
+      advanced: 'advanced',
+    };
+    return map[String(raw).toLowerCase()] || 'basic';
+  }
+
+  private mapLandingDifficulty(raw: string): string {
+    const key = String(raw || '').toLowerCase().trim();
+    const map: Record<string, string> = {
+      basica: 'very_low',
+      basico: 'very_low',
+      easy: 'very_low',
+      very_low: 'very_low',
+      very_easy: 'very_low',
+      'muy baja': 'very_low',
+      intermedia: 'low',
+      intermedio: 'low',
+      low: 'low',
+      baja: 'low',
+      avanzada: 'medium',
+      avanzado: 'medium',
+      medium: 'medium',
+      media: 'medium',
+      hard: 'medium',
+    };
+    return map[key] || 'very_low';
   }
 
   async findCourseSponsors(courseId: string) {

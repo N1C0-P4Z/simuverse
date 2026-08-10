@@ -2,6 +2,8 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import { usePagination } from '@/hooks/usePagination';
 import { apiClient } from '@/services/ApiClient';
 import { Pencil, Plus, Send, Trash2 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
@@ -45,11 +47,13 @@ interface User {
 }
 
 export function AssignmentsABM() {
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const { data: assignments, total, page, totalPages, setPage, loading: assignmentsLoading, refresh } = usePagination<Assignment>({
+    endpoint: '/assignments',
+  });
   const [courses, setCourses] = useState<Course[]>([]);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dropdownLoading, setDropdownLoading] = useState(true);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
@@ -90,7 +94,7 @@ export function AssignmentsABM() {
   useEffect(() => {
     setSelectedScenarios([]);
     if (selectedCourse) {
-      apiClient.get(`/scenarios?course_id=${selectedCourse}`)
+      apiClient.get(`/scenarios/dropdown/list?course_id=${selectedCourse}`)
         .then(r => setScenarios(Array.isArray(r.data) ? r.data : []))
         .catch(() => setScenarios([]));
     } else {
@@ -98,28 +102,13 @@ export function AssignmentsABM() {
     }
   }, [selectedCourse]);
 
-  // Fetch data
   useEffect(() => {
-    Promise.all([
-      fetchAssignments(),
-      fetchCourses(),
-      fetchStudents(),
-    ]).then(() => setLoading(false));
+    Promise.all([fetchCourses(), fetchStudents()]).then(() => setDropdownLoading(false));
   }, []);
-
-  const fetchAssignments = async () => {
-    try {
-      const response = await apiClient.get('/assignments');
-      setAssignments(Array.isArray(response.data) ? response.data : []);
-    } catch (error) {
-      console.error('Error fetching assignments:', error);
-      setAssignments([]);
-    }
-  };
 
   const fetchCourses = async () => {
     try {
-      const response = await apiClient.get('/courses');
+      const response = await apiClient.get('/courses/dropdown/list');
       setCourses(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching courses:', error);
@@ -130,7 +119,8 @@ export function AssignmentsABM() {
   const fetchStudents = async () => {
     try {
       const response = await apiClient.get('/users?role=student');
-      setUsers(Array.isArray(response.data) ? response.data : []);
+      const raw = response.data?.data ?? response.data;
+      setUsers(Array.isArray(raw) ? raw : []);
     } catch (error) {
       console.error('Error fetching students:', error);
       setUsers([]);
@@ -171,7 +161,7 @@ export function AssignmentsABM() {
     }
 
     setSaving(false);
-    await fetchAssignments();
+    refresh();
 
     if (errors === 0) {
       toast.success(`✅ ${created} asignación${created !== 1 ? 'es' : ''} creada${created !== 1 ? 's' : ''} correctamente`);
@@ -213,7 +203,7 @@ export function AssignmentsABM() {
         onClick: async () => {
           try {
             await apiClient.delete(`/assignments/${id}`);
-            await fetchAssignments();
+            refresh();
             toast.success('Asignación eliminada');
           } catch { toast.error('Error al eliminar'); }
         },
@@ -241,7 +231,7 @@ export function AssignmentsABM() {
       });
       toast.success('Asignación actualizada');
       setEditingAssignment(null);
-      await fetchAssignments();
+      refresh();
     } catch {
       toast.error('Error al actualizar la asignación');
     }
@@ -257,7 +247,7 @@ export function AssignmentsABM() {
     return colors[status] || 'bg-gray-100 text-gray-900';
   };
 
-  if (loading) {
+  if (dropdownLoading) {
     return <div className="p-8 text-center">Cargando asignaciones...</div>;
   }
 
@@ -424,6 +414,10 @@ export function AssignmentsABM() {
       )}
 
       {/* Lista de asignaciones */}
+      {assignmentsLoading ? (
+        <div className="p-8 text-center text-gray-500">Cargando asignaciones...</div>
+      ) : (
+      <>
       <div className="grid grid-cols-1 gap-4">
         {assignments.map((assignment) => (
           <Card key={assignment.id} className="p-4 hover:shadow-md transition-shadow">
@@ -478,6 +472,43 @@ export function AssignmentsABM() {
         <Card className="p-8 text-center">
           <p className="text-gray-600">No hay asignaciones. Crea una nueva asignación para empezar.</p>
         </Card>
+      )}
+
+      {total > 0 && (
+        <div className="flex items-center justify-between mt-4">
+          <p className="text-sm text-gray-500">{total} resultado{total !== 1 ? 's' : ''}</p>
+          {totalPages > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => page > 1 && setPage(page - 1)}
+                    className={page <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <PaginationItem key={p}>
+                    <PaginationLink
+                      isActive={p === page}
+                      onClick={() => setPage(p)}
+                      className="cursor-pointer"
+                    >
+                      {p}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => page < totalPages && setPage(page + 1)}
+                    className={page >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
+        </div>
+      )}
+      </>
       )}
 
       {/* Edit Dialog */}

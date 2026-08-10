@@ -35,3 +35,39 @@ describe('NotificationsController — RBAC Phase A', () => {
     });
   });
 });
+
+describe('NotificationsController — Pagination', () => {
+  let controller: NotificationsController;
+  let mockService: Record<string, jest.Mock>;
+
+  beforeEach(async () => {
+    mockService = {
+      findAll: jest.fn(),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [NotificationsController],
+      providers: [
+        { provide: NotificationsService, useValue: mockService },
+        { provide: RbacService, useValue: {} },
+      ],
+    }).compile();
+
+    controller = module.get(NotificationsController);
+  });
+
+  it('passes pagination and filters to service.findAll', async () => {
+    const expected = { data: [{ id: '1' }], total: 1, page: 1, limit: 10 };
+    mockService.findAll.mockResolvedValue(expected);
+
+    const result = await controller.findAll('user-1', 'true', { page: 1, limit: 10 });
+
+    expect(mockService.findAll).toHaveBeenCalledWith({
+      recipient_id: 'user-1',
+      unread: 'true',
+      page: 1,
+      limit: 10,
+    });
+    expect(result).toEqual(expected);
+  });
+});

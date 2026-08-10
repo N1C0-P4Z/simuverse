@@ -7,12 +7,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { LogoField, useFilePreview } from '@/components/ui/logo-field';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { ClipboardList, GraduationCap, Globe, Mail, MapPin, Phone, Plus, RotateCw, Settings } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { useAdmin } from '@/lib/admin-context';
 import { apiClient } from '@/services/ApiClient';
+import { usePagination } from '@/hooks/usePagination';
 interface FoundationConfig {
   id: number;
   name: string;
@@ -54,24 +56,15 @@ const emptyForm = (): Omit<FoundationConfig, 'id' | 'is_active'> => ({
 
 export function FoundationABM() {
   const { readOnly } = useAdmin();
-  const [foundations, setFoundations] = useState<FoundationConfig[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: foundations, total, page, totalPages, setPage, loading, error, refresh } = usePagination<FoundationConfig>({
+    endpoint: '/foundation-config',
+  });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const filePreviewUrl = useFilePreview(logoFile);
-
-  const fetchFoundations = async () => {
-    try {
-      const r = await apiClient.get('/foundation-config');
-      setFoundations(Array.isArray(r.data) ? r.data : []);
-    } catch { setFoundations([]); }
-    setLoading(false);
-  };
-
-  useEffect(() => { fetchFoundations(); }, []);
 
   const buildPayload = (): FormData | typeof form => {
     if (!logoFile) return form;
@@ -99,7 +92,7 @@ export function FoundationABM() {
       setForm(emptyForm());
       setLogoFile(null);
       setEditingId(null);
-      fetchFoundations();
+      refresh();
     } catch (e: any) { toast.error(e?.response?.data?.message || 'Error al guardar'); }
     setSaving(false);
   };
@@ -119,7 +112,7 @@ export function FoundationABM() {
   const handleDeactivate = async (id: number) => {
     try {
       await apiClient.delete(`/foundation-config/${id}`);
-      fetchFoundations();
+      refresh();
       toast.success('Institución desactivada');
     } catch { toast.error('Error al desactivar'); }
   };
@@ -127,7 +120,7 @@ export function FoundationABM() {
   const handleReactivate = async (id: number) => {
     try {
       await apiClient.put(`/foundation-config/${id}/reactivate`);
-      fetchFoundations();
+      refresh();
       toast.success('Institución reactivada');
     } catch { toast.error('Error al reactivar'); }
   };
@@ -147,6 +140,7 @@ export function FoundationABM() {
   };
 
   if (loading) return <div className="p-8 text-center text-muted-foreground">Cargando...</div>;
+  if (error) return <div className="p-8 text-center text-red-500">Error: {error}</div>;
 
   return (
     <div className="space-y-6">
@@ -285,11 +279,46 @@ export function FoundationABM() {
         ))}
       </div>
 
-      {foundations.length === 0 && (
+      {total === 0 && (
         <div className="text-center py-16 text-muted-foreground">
           <GraduationCap className="w-12 h-12 mx-auto mb-4 opacity-50" />
           <p className="font-medium">No hay instituciones configuradas.</p>
           <p className="text-sm mt-1">La institución educativa aparece en los certificados emitidos.</p>
+        </div>
+      )}
+
+      {total > 0 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-gray-500">{total} institución{total !== 1 ? 'es' : ''}</p>
+          {totalPages > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => page > 1 && setPage(page - 1)}
+                    className={page <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <PaginationItem key={p}>
+                    <PaginationLink
+                      isActive={p === page}
+                      onClick={() => setPage(p)}
+                      className="cursor-pointer"
+                    >
+                      {p}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => page < totalPages && setPage(page + 1)}
+                    className={page >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
         </div>
       )}
     </div>

@@ -9,6 +9,7 @@ import {
   ParseIntPipe,
   Post,
   Put,
+  Query,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -18,6 +19,7 @@ import { logoUploadOptions, resolveLogoUrl, cleanupOldLogo } from '../files/logo
 import { SponsorsService } from './sponsors.service';
 import { CreateSponsorDto } from './dto/create-sponsor.dto';
 import { UpdateSponsorDto } from './dto/update-sponsor.dto';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
@@ -36,8 +38,8 @@ export class SponsorsController {
   @Public()
   @Roles()
   @Permissions()
-  async findAll() {
-    return this.sponsorsService.findAll();
+  async findAll(@Query() pagination: PaginationDto) {
+    return this.sponsorsService.findAll({ page: pagination.page, limit: pagination.limit });
   }
 
   @Get(':id')

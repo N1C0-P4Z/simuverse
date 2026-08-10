@@ -64,6 +64,10 @@ describe('RBAC Guard Wiring (e2e)', () => {
         create: jest.fn(),
         delete: jest.fn(),
       },
+      sessionRubricReview: {
+        count: jest.fn(),
+        findMany: jest.fn(),
+      },
       $connect: jest.fn(),
       $disconnect: jest.fn(),
     };
@@ -217,12 +221,50 @@ describe('RBAC Guard Wiring (e2e)', () => {
     });
 
     it('GET /api/global-stats → 200', async () => {
-      prismaMock.user.groupBy.mockResolvedValue([]);
+      prismaMock.user.groupBy.mockResolvedValue([
+        { role: 'student', _count: { _all: 10 } },
+        { role: 'teacher', _count: { _all: 2 } },
+      ]);
+      prismaMock.sessionRubricReview.count
+        .mockResolvedValueOnce(5)
+        .mockResolvedValueOnce(3)
+        .mockResolvedValueOnce(1);
+      prismaMock.sessionRubricReview.findMany
+        .mockResolvedValueOnce([{ total_score: 80, max_score: 100 }])
+        .mockResolvedValueOnce([]);
 
-      await request(app.getHttpServer())
+      const res = await request(app.getHttpServer())
         .get('/api/global-stats')
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
+
+      expect(res.body.total_evaluations).toBe(5);
+      expect(res.body.users).toEqual([
+        { role: 'student', count: 10 },
+        { role: 'teacher', count: 2 },
+      ]);
+      expect(
+        res.body.users.every((u: { count: unknown }) => typeof u.count === 'number'),
+      ).toBe(true);
+    });
+
+    it('GET /api/global-stats → 200 with zero review stats when reviews table missing', async () => {
+      prismaMock.user.groupBy.mockResolvedValue([
+        { role: 'admin', _count: { _all: 1 } },
+      ]);
+      prismaMock.sessionRubricReview.count.mockRejectedValue(
+        new Error('relation "session_rubric_reviews" does not exist'),
+      );
+
+      const res = await request(app.getHttpServer())
+        .get('/api/global-stats')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      expect(res.body.users).toEqual([{ role: 'admin', count: 1 }]);
+      expect(res.body.total_evaluations).toBe(0);
+      expect(res.body.top_courses).toEqual([]);
+      expect(res.body.top_students).toEqual([]);
     });
 
     it('GET /api/teacher-groups → 200', async () => {

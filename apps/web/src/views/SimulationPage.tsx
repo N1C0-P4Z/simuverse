@@ -1,4 +1,5 @@
 'use client'
+import { PartnersStrip } from '@/components/PartnersStrip';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -12,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/hooks/useAuth';
 import { apiClient } from '@/services/ApiClient';
-import { ArrowLeft, BarChart3, Bot, CheckCircle2, ChevronDown, ChevronUp, ExternalLink, FileText, Loader, Lock, Mail, MessageSquare, Paperclip, Pencil, Send, User } from 'lucide-react';
+import { ArrowLeft, BarChart3, BookOpen, Bot, CheckCircle2, ChevronDown, ChevronUp, ExternalLink, FileText, Loader, Lock, Mail, MessageSquare, Paperclip, Pencil, Send, User } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -521,10 +522,19 @@ const SimulationPage: React.FC = () => {
             <div className="text-center min-w-0 flex-1">
               <h1 className="text-base sm:text-xl font-bold truncate">{course?.title || 'Simulación'}</h1>
             </div>
-            <div className="w-10 sm:w-24 shrink-0" />
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1 shrink-0 text-xs sm:text-sm"
+              onClick={() => router.push(`/curso/${courseId}`)}
+            >
+              <BookOpen className="w-4 h-4" />
+              <span className="hidden sm:inline">Info del curso</span>
+            </Button>
           </div>
         </div>
         <main className="container mx-auto px-4 py-12 max-w-lg">
+          <PartnersStrip courseId={courseId} className="mb-6" />
           <Card>
             <CardHeader>
               <CardTitle>Sin prácticas disponibles</CardTitle>
@@ -575,7 +585,15 @@ const SimulationPage: React.FC = () => {
             <h1 className="text-base sm:text-xl md:text-2xl font-bold truncate">{course?.title || 'Simulación'}</h1>
             <p className="hidden sm:block text-xs sm:text-sm text-muted-foreground truncate">{course?.description}</p>
           </div>
-          <div className="w-10 sm:w-24 shrink-0" />
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1 shrink-0 text-xs sm:text-sm"
+            onClick={() => router.push(`/curso/${courseId}`)}
+          >
+            <BookOpen className="w-4 h-4" />
+            <span className="hidden sm:inline">Info del curso</span>
+          </Button>
         </div>
       </div>
 
@@ -667,6 +685,8 @@ const SimulationPage: React.FC = () => {
             )}
           </Card>
         )}
+
+        <PartnersStrip courseId={courseId} className="mb-6" />
 
         {/* Dynamic tabs driven by course.modules */}
         {(() => {

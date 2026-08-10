@@ -6,12 +6,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { LogoField, useFilePreview } from '@/components/ui/logo-field';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Globe, Handshake, Plus, RotateCw, Settings, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { useAdmin } from '@/lib/admin-context';
 import { apiClient } from '@/services/ApiClient';
+import { usePagination } from '@/hooks/usePagination';
 
 interface Sponsor {
   id: number;
@@ -48,24 +50,15 @@ function LogoDisplay({ name, logoUrl, size = 'md' }: { name: string; logoUrl?: s
 
 export function SponsorsABM() {
   const { readOnly } = useAdmin();
-  const [sponsors, setSponsors] = useState<Sponsor[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: sponsors, total, page, totalPages, setPage, loading, error, refresh } = usePagination<Sponsor>({
+    endpoint: '/sponsors',
+  });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const filePreviewUrl = useFilePreview(logoFile);
-
-  const fetchAll = async () => {
-    try {
-      const r = await apiClient.get('/sponsors');
-      setSponsors(Array.isArray(r.data) ? r.data : []);
-    } catch { setSponsors([]); }
-    setLoading(false);
-  };
-
-  useEffect(() => { fetchAll(); }, []);
 
   const buildPayload = (): FormData | typeof form => {
     if (!logoFile) return form;
@@ -88,12 +81,12 @@ export function SponsorsABM() {
       } else {
         await apiClient.post('/sponsors', payload);
       }
-      toast.success(editingId ? 'Sponsor actualizado' : 'Sponsor creado');
+      toast.success(editingId ? 'Patrocinador actualizado' : 'Patrocinador creado');
       setDialogOpen(false);
       setForm(emptyForm());
       setLogoFile(null);
       setEditingId(null);
-      fetchAll();
+      refresh();
     } catch (e: any) { toast.error(e.message); }
     setSaving(false);
   };
@@ -106,14 +99,14 @@ export function SponsorsABM() {
   };
 
   const handleDeactivate = (id: number) => {
-    toast.error('¿Desactivar este sponsor?', {
+    toast.error('¿Desactivar este patrocinador?', {
       action: {
         label: 'Desactivar',
         onClick: async () => {
           try {
             await apiClient.delete(`/sponsors/${id}`);
-            toast.success('Sponsor desactivado');
-            fetchAll();
+            toast.success('Patrocinador desactivado');
+            refresh();
           } catch { toast.error('Error al desactivar'); }
         },
       },
@@ -124,27 +117,28 @@ export function SponsorsABM() {
   const handleReactivate = async (id: number) => {
     try {
       await apiClient.put(`/sponsors/${id}/reactivate`);
-      fetchAll();
-      toast.success('Sponsor reactivado');
+      refresh();
+      toast.success('Patrocinador reactivado');
     } catch { toast.error('Error al reactivar'); }
   };
 
   if (loading) return <div className="p-8 text-center text-muted-foreground">Cargando...</div>;
+  if (error) return <div className="p-8 text-center text-red-500">Error: {error}</div>;
 
   return (
     <div className="space-y-8">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold flex items-center gap-2"><Handshake className="w-6 h-6" /> Sponsors</h2>
+          <h2 className="text-2xl font-bold flex items-center gap-2"><Handshake className="w-6 h-6" /> Patrocinadores</h2>
           <p className="text-gray-600 mt-1">Marcas o empresas que patrocinan cursos. Se vinculan desde el formulario del curso.</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={o => { setDialogOpen(o); if (!o) { setForm(emptyForm()); setLogoFile(null); setEditingId(null); } }}>
           {!readOnly && <DialogTrigger asChild>
-            <Button><Plus className="w-4 h-4 mr-2" /> Nuevo Sponsor</Button>
+            <Button><Plus className="w-4 h-4 mr-2" /> Nuevo Patrocinador</Button>
           </DialogTrigger>}
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{editingId ? 'Editar Sponsor' : 'Nuevo Sponsor'}</DialogTitle>
+              <DialogTitle>{editingId ? 'Editar Patrocinador' : 'Nuevo Patrocinador'}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 mt-2">
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border">
@@ -154,7 +148,7 @@ export function SponsorsABM() {
                       {form.name ? getInitials(form.name) : '?'}
                     </div>
                 }
-                <p className="font-semibold">{form.name || 'Nombre del sponsor'}</p>
+                <p className="font-semibold">{form.name || 'Nombre del patrocinador'}</p>
               </div>
 
               <div className="space-y-3">
@@ -177,7 +171,7 @@ export function SponsorsABM() {
               </div>
 
               <Button className="w-full" onClick={handleSave} disabled={saving}>
-                {saving ? 'Guardando...' : editingId ? 'Actualizar' : 'Crear Sponsor'}
+                {saving ? 'Guardando...' : editingId ? 'Actualizar' : 'Crear Patrocinador'}
               </Button>
             </div>
           </DialogContent>
@@ -206,10 +200,45 @@ export function SponsorsABM() {
         ))}
       </div>
 
-      {sponsors.length === 0 && (
+      {total === 0 && (
         <div className="text-center py-10 text-muted-foreground">
           <Handshake className="w-10 h-10 mx-auto mb-3 opacity-50" />
-          <p>No hay sponsors. Agregá el primero.</p>
+          <p>No hay patrocinadores. Agregá el primero.</p>
+        </div>
+      )}
+
+      {total > 0 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-gray-500">{total} sponsor{total !== 1 ? 's' : ''}</p>
+          {totalPages > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => page > 1 && setPage(page - 1)}
+                    className={page <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <PaginationItem key={p}>
+                    <PaginationLink
+                      isActive={p === page}
+                      onClick={() => setPage(p)}
+                      className="cursor-pointer"
+                    >
+                      {p}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => page < totalPages && setPage(page + 1)}
+                    className={page >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
         </div>
       )}
     </div>

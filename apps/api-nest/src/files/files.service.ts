@@ -10,6 +10,7 @@ import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { UpdateFileDto } from './dto/file.dto';
+import { ALLOWED_EXTENSIONS } from '../common/file-upload.constants';
 
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 MB
 
@@ -46,6 +47,13 @@ export class FilesService {
     if (file.size > MAX_UPLOAD_BYTES) {
       throw new PayloadTooLargeException(
         `El archivo supera el máximo de 5 MB. Usá el link de Drive del curso para archivos más grandes.`,
+      );
+    }
+
+    const fileExt = `.${FilesService.getFileExtension(file.originalname)}`;
+    if (!(ALLOWED_EXTENSIONS as readonly string[]).includes(fileExt)) {
+      throw new BadRequestException(
+        `Tipo de archivo no permitido (${fileExt}). Extensiones permitidas: ${ALLOWED_EXTENSIONS.join(', ')}`,
       );
     }
 

@@ -15,6 +15,7 @@ import {
 import { AssignmentsService } from './assignments.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
@@ -35,11 +36,14 @@ export class AssignmentsController {
     @Query('student_id') studentId?: string,
     @Query('course_id') courseId?: string,
     @Query('status') status?: string,
+    @Query() pagination?: PaginationDto,
   ) {
     return this.assignmentsService.findAll({
       student_id: studentId,
       course_id: courseId,
       status,
+      page: pagination?.page,
+      limit: pagination?.limit,
     });
   }
 

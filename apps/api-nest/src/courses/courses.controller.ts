@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { IsString, IsOptional, IsBoolean, IsArray, IsInt, MinLength } from 'class-validator';
 import { CoursesService } from './courses.service';
+import { CourseRubricService } from '../rubrics/course-rubric.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
@@ -20,6 +21,8 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { Permissions } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
+import { PaginationDto } from '../common/dto/pagination.dto';
+import { UpdateCourseRubricDto } from '../rubrics/dto/update-course-rubric.dto';
 
 class CreateCourseDto {
   @IsString()
@@ -182,12 +185,32 @@ class EnrollDto {
 @Controller('courses')
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class CoursesController {
-  constructor(private coursesService: CoursesService) {}
+  constructor(
+    private coursesService: CoursesService,
+    private rubricService: CourseRubricService,
+  ) {}
 
   @Get()
-  async findAll(@Query('is_active') isActive?: string) {
+  async findAll(
+    @Query() pagination: PaginationDto,
+    @Query('is_active') isActive?: string,
+  ) {
     const active = isActive !== undefined ? isActive === 'true' : undefined;
-    return this.coursesService.findAll(active);
+    return this.coursesService.findAll({
+      page: pagination.page,
+      limit: pagination.limit,
+      isActive: active,
+    });
+  }
+
+  @Get('dropdown/list')
+  async findAllDropdown(
+    @Query('is_active') isActive?: string,
+    @CurrentUser() user?: any,
+  ) {
+    const active = isActive !== undefined ? isActive === 'true' : undefined;
+    const teacherId = user?.role === 'teacher' ? user.id : undefined;
+    return this.coursesService.findAllDropdown(active, teacherId);
   }
 
   @Get('catalog')
@@ -203,6 +226,31 @@ export class CoursesController {
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
     });
+  }
+
+  @Get(':courseId/rubric')
+  @Roles('admin', 'teacher', 'ministerio', 'student')
+  async getRubric(@Param('courseId') courseId: string) {
+    return this.rubricService.getActiveRubricForCourse(courseId);
+  }
+
+  @Put(':courseId/rubric')
+  @Roles('admin', 'teacher')
+  @Permissions('courses.manage')
+  async updateRubric(
+    @Param('courseId') courseId: string,
+    @Body() dto: UpdateCourseRubricDto,
+  ) {
+    return this.rubricService.updateRubric(courseId, dto);
+  }
+
+  @Get(':courseId/landing')
+  @Roles('student', 'admin', 'teacher')
+  async getLanding(
+    @Param('courseId') courseId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.coursesService.getLanding(courseId, userId);
   }
 
   @Get(':courseId')

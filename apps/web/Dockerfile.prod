@@ -4,11 +4,14 @@ WORKDIR /app
 FROM base AS deps
 COPY package.json package-lock.json ./
 COPY apps/web/package.json ./apps/web/
+COPY apps/shared/package.json ./apps/shared/
 RUN npm install
 
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY apps/web/ ./apps/web/
+# DocumentsABM imports @simuverse/shared via tsconfig path → ../shared/src/file-upload
+COPY apps/shared/ ./apps/shared/
 COPY tsconfig.json ./
 
 # NEXT_PUBLIC_* are baked into the client bundle at build time.

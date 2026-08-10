@@ -74,7 +74,7 @@ async function main() {
     for (const func of allFuncs) {
       await prisma.rolePermission.upsert({
         where: { role_name_functionality_id: { role_name: role.name, functionality_id: func.id } },
-        update: { enabled: role.name === 'admin' }, // admin tiene true, otros false por ahora
+        update: {}, // no sobrescribir enabled en filas existentes (RBAC customizado)
         create: { role_name: role.name, functionality_id: func.id, enabled: role.name === 'admin' },
       });
     }
@@ -446,6 +446,14 @@ async function main() {
   } catch (err: any) {
     console.warn('⚠️ Firebase sync skipped in seed:', err?.message || err);
   }
+
+  const { CourseRubricService } = await import('../rubrics/course-rubric.service');
+  const rubricService = new CourseRubricService(prisma as any);
+  const allCourses = await prisma.course.findMany({ select: { id: true, title: true } });
+  for (const c of allCourses) {
+    await rubricService.cloneDefaultRubricToCourse(c.id);
+  }
+  console.log(`✅ Rúbricas base clonadas para ${allCourses.length} curso(s)`);
 
   console.log('\n🎉 Seed completado exitosamente!');
   console.log('\n📋 Credenciales de acceso:');

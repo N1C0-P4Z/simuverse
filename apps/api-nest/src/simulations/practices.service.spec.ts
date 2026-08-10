@@ -58,6 +58,7 @@ describe('PracticesService', () => {
         findUnique: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        count: jest.fn(),
       },
       simulationInstance: {
         findMany: jest.fn(),
@@ -152,6 +153,25 @@ describe('PracticesService', () => {
       const result = await service.listByCourse(courseId);
 
       expect(result[0].agent_key).toBe('practica-2');
+    });
+  });
+
+  describe('listByCoursePaginated', () => {
+    it('returns envelope with skip/take for explicit practices', async () => {
+      prismaMock.scenario.count = jest.fn().mockResolvedValueOnce(2);
+      prismaMock.scenario.findMany.mockResolvedValueOnce([practices[0]]);
+
+      const result = await service.listByCoursePaginated(courseId, 1, 1);
+
+      expect(result).toEqual({
+        data: [expect.objectContaining({ id: 'p1', agent_key: 'practica-1' })],
+        total: 2,
+        page: 1,
+        limit: 1,
+      });
+      expect(prismaMock.scenario.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 0, take: 1 }),
+      );
     });
   });
 

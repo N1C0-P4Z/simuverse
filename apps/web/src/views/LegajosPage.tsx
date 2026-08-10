@@ -8,8 +8,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuth } from '@/hooks/useAuth';
+import { usePagination } from '@/hooks/usePagination';
 import {
     AlertCircle, BarChart3,
     ChevronRight,
@@ -21,8 +24,8 @@ import {
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-import { apiClient } from '@/services/ApiClient';
 import { getScoreBarColor, getScoreText } from '@/lib/score-colors';
+import { apiClient } from '@/services/ApiClient';
 
 interface StudentSummary {
   id: string;
@@ -41,11 +44,15 @@ interface StudentSummary {
 const LegajosPage = () => {
   const { user, loading, hasRole } = useAuth();
   const router = useRouter();
-  const [students, setStudents] = useState<StudentSummary[]>([]);
-  const [fetching, setFetching] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: students, total, page, totalPages, setPage, setExtraParams, loading: fetching, error } = usePagination<StudentSummary>({
+    endpoint: '/legajo/students',
+  });
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'activity' | 'score'>('activity');
+  const [courseFilter, setCourseFilter] = useState('');
+  const [teacherFilter, setTeacherFilter] = useState('');
+  const [courses, setCourses] = useState<Array<{ id: string; title: string }>>([]);
+  const [teachers, setTeachers] = useState<Array<{ id: string; name: string }>>([]);
 
   useEffect(() => {
     if (!loading && user && !hasRole('admin') && !hasRole('teacher') && !hasRole('ministerio') && !hasRole('supervisor')) {
@@ -53,37 +60,43 @@ const LegajosPage = () => {
     }
   }, [user, loading, hasRole, router]);
 
+  // Server-side filters via debounced setExtraParams
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const params: Record<string, unknown> = {};
+      if (search) params.search = search;
+      if (courseFilter) params.course_id = courseFilter;
+      if (teacherFilter) params.teacher_id = teacherFilter;
+      setExtraParams(params);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search, courseFilter, teacherFilter, setExtraParams]);
+
+  // Fetch courses and teachers for filter dropdowns
   useEffect(() => {
     if (!user) return;
-    apiClient.get('/legajo/students')
-      .then(r => r.data)
-      .then(data => {
-        if (Array.isArray(data)) setStudents(data);
-        else if (data.error) setError(data.error);
-        setFetching(false);
-      })
-      .catch(err => {
-        setError(err.message || 'Error al cargar alumnos');
-        setFetching(false);
-      });
+    apiClient.get('/courses/dropdown/list').then(r => {
+      const list = Array.isArray(r.data) ? r.data : [];
+      setCourses(list.map((c: any) => ({ id: c.id, title: c.title })));
+    }).catch(() => {});
+    apiClient.get('/users', { params: { role: 'teacher' } }).then(r => {
+      const raw = r.data?.data ?? r.data;
+      const list = Array.isArray(raw) ? raw : [];
+      setTeachers(list.map((t: any) => ({ id: t.id, name: t.name })));
+    }).catch(() => {});
   }, [user]);
 
   const n = (v: string | number | null) => (v === null || v === undefined ? 0 : Number(v));
 
-  const filtered = students
-    .filter(s =>
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.email.toLowerCase().includes(search.toLowerCase())
-    )
-    .sort((a, b) => {
-      if (sortBy === 'name') return a.name.localeCompare(b.name);
-      if (sortBy === 'score') return n(b.avg_score) - n(a.avg_score);
-      // activity: most recent first
-      if (!a.last_activity && !b.last_activity) return 0;
-      if (!a.last_activity) return 1;
-      if (!b.last_activity) return -1;
-      return new Date(b.last_activity).getTime() - new Date(a.last_activity).getTime();
-    });
+  // Client-side sort on current page only (server handles search/filtering)
+  const sorted = [...students].sort((a, b) => {
+    if (sortBy === 'name') return a.name.localeCompare(b.name);
+    if (sortBy === 'score') return n(b.avg_score) - n(a.avg_score);
+    if (!a.last_activity && !b.last_activity) return 0;
+    if (!a.last_activity) return 1;
+    if (!b.last_activity) return -1;
+    return new Date(b.last_activity).getTime() - new Date(a.last_activity).getTime();
+  });
 
   const scoreColor = (v: number | null) =>
     v === null ? '' : getScoreText(v);
@@ -123,7 +136,7 @@ const LegajosPage = () => {
         <div className="mb-6">
           <h1 className="text-2xl font-bold">Legajos de Alumnos</h1>
           <p className="text-muted-foreground text-sm">
-            {students.length} alumno{students.length !== 1 ? 's' : ''} registrado{students.length !== 1 ? 's' : ''}
+            {total} alumno{total !== 1 ? 's' : ''} registrado{total !== 1 ? 's' : ''}
           </p>
         </div>
         {/* Filtros */}
@@ -147,23 +160,42 @@ const LegajosPage = () => {
               <SelectItem value="score">Mejor puntaje</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={courseFilter} onValueChange={v => setCourseFilter(v === '__all__' ? '' : v)}>
+            <SelectTrigger className="w-48 shrink-0">
+              <SelectValue placeholder="Todos los cursos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todos los cursos</SelectItem>
+              {courses.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={teacherFilter} onValueChange={v => setTeacherFilter(v === '__all__' ? '' : v)}>
+            <SelectTrigger className="w-48 shrink-0">
+              <SelectValue placeholder="Todos los docentes" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todos los docentes</SelectItem>
+              {teachers.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
           {search && (
             <Badge variant="outline" className="shrink-0">
-              {filtered.length} resultado{filtered.length !== 1 ? 's' : ''}
+              {total} resultado{total !== 1 ? 's' : ''}
             </Badge>
           )}
         </div>
 
-        {/* Summary bar */}
+        {/* Summary bar — total uses server count; other stats are page-scoped */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
           {[
             {
               label: 'Alumnos totales',
-              value: students.length,
+              value: total,
               icon: GraduationCap,
               color: 'text-blue-600',
             },
             {
+              // Page-scoped: full counts would require a separate aggregate endpoint
               label: 'Con simulaciones',
               value: students.filter(s => n(s.total_simulations) > 0).length,
               icon: BarChart3,
@@ -189,7 +221,7 @@ const LegajosPage = () => {
         </div>
 
         {/* Student grid */}
-        {filtered.length === 0 ? (
+        {sorted.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
             <GraduationCap className="w-12 h-12 mx-auto mb-4 opacity-40" />
             <p className="text-lg font-medium">
@@ -197,76 +229,109 @@ const LegajosPage = () => {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map(student => {
-              const sims = n(student.total_simulations);
-              const evals = n(student.total_evaluations);
-              const avg = student.avg_score !== null ? n(student.avg_score) : null;
-              const best = student.best_score !== null ? n(student.best_score) : null;
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Alumno</TableHead>
+                  <TableHead className="text-center">Sims.</TableHead>
+                  <TableHead className="text-center">Eval.</TableHead>
+                  <TableHead className="text-center">Prom.</TableHead>
+                  <TableHead>Mejor puntaje</TableHead>
+                  <TableHead>Última actividad</TableHead>
+                  <TableHead className="w-8"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sorted.map(student => {
+                  const sims = n(student.total_simulations);
+                  const evals = n(student.total_evaluations);
+                  const avg = student.avg_score !== null ? n(student.avg_score) : null;
+                  const best = student.best_score !== null ? n(student.best_score) : null;
 
-              return (
-                <Card
-                  key={student.id}
-                  className="hover:shadow-md transition-all duration-200 cursor-pointer group border hover:border-primary/30"
-                  onClick={() => router.push(`/student-ledger/${student.id}`)}
-                >
-                  <CardContent className="pt-5 pb-4">
-                    {/* Header */}
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold truncate group-hover:text-primary transition-colors leading-tight">
-                          {student.name}
-                        </h3>
-                        <p className="text-xs text-muted-foreground truncate mt-0.5">{student.email}</p>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0 ml-2 mt-0.5" />
-                    </div>
-
-                    {/* Stats row */}
-                    <div className="grid grid-cols-3 gap-1.5 mb-3">
-                      <div className="text-center bg-muted/40 rounded-md py-2">
-                        <p className="text-lg font-bold leading-none">{sims}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Sims.</p>
-                      </div>
-                      <div className="text-center bg-muted/40 rounded-md py-2">
-                        <p className="text-lg font-bold leading-none">{evals}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Sim.</p>
-                      </div>
-                      <div className="text-center bg-muted/40 rounded-md py-2">
-                        <p className={`text-lg font-bold leading-none ${scoreColor(avg)}`}>
-                          {avg !== null ? avg.toFixed(0) : '—'}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Prom.</p>
-                      </div>
-                    </div>
-
-                    {/* Best score bar */}
-                    {best !== null && (
-                      <div className="mb-2">
-                        <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                          <span>Mejor puntaje</span>
-                          <span className={`font-semibold ${scoreColor(best)}`}>{best}/100</span>
+                  return (
+                    <TableRow
+                      key={student.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => router.push(`/student-ledger/${student.id}`)}
+                    >
+                      <TableCell>
+                        <div className="min-w-0">
+                          <p className="font-semibold truncate">{student.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{student.email}</p>
                         </div>
-                        <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all ${getScoreBarColor(best)}`}
-                            style={{ width: `${best}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
+                      </TableCell>
+                      <TableCell className="text-center font-medium">{sims}</TableCell>
+                      <TableCell className="text-center font-medium">{evals}</TableCell>
+                      <TableCell className={`text-center font-medium ${scoreColor(avg)}`}>
+                        {avg !== null ? avg.toFixed(0) : '—'}
+                      </TableCell>
+                      <TableCell>
+                        {best !== null ? (
+                          <div className="flex items-center gap-2 min-w-[120px]">
+                            <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${getScoreBarColor(best)}`}
+                                style={{ width: `${best}%` }}
+                              />
+                            </div>
+                            <span className={`text-xs font-semibold ${scoreColor(best)}`}>{best}</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Clock className="w-3 h-3 shrink-0" />
+                          {student.last_activity
+                            ? new Date(student.last_activity).toLocaleDateString('es-AR')
+                            : 'Sin actividad'}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
 
-                    {/* Last activity */}
-                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-2">
-                      <Clock className="w-3 h-3 shrink-0" />
-                      {student.last_activity
-                        ? `Activo: ${new Date(student.last_activity).toLocaleDateString('es-AR')}`
-                        : 'Sin actividad registrada'}
-                    </p>
-                  </CardContent>
-                </Card>
-              );
-            })}
+        {total > 0 && (
+          <div className="flex items-center justify-between mt-6">
+            <p className="text-sm text-muted-foreground">{total} alumno{total !== 1 ? 's' : ''}</p>
+            {totalPages > 1 && (
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={() => page > 1 && setPage(page - 1)}
+                      className={page <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                    />
+                  </PaginationItem>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                    <PaginationItem key={p}>
+                      <PaginationLink
+                        isActive={p === page}
+                        onClick={() => setPage(p)}
+                        className="cursor-pointer"
+                      >
+                        {p}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ))}
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={() => page < totalPages && setPage(page + 1)}
+                      className={page >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            )}
           </div>
         )}
 

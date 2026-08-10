@@ -4,11 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useAdmin } from '@/lib/admin-context';
 import { apiClient } from '@/services/ApiClient';
+import { usePagination } from '@/hooks/usePagination';
 import {
     BookOpen,
     CheckCircle,
@@ -124,9 +126,10 @@ const diffBadgeClass = (d: string) => ({
 
 export function ScenariosABM() {
   const { readOnly } = useAdmin();
-  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const { data: scenarios, total, page, totalPages, setPage, loading, setExtraParams, refresh } = usePagination<Scenario>({
+    endpoint: '/scenarios',
+  });
   const [courses, setCourses] = useState<Course[]>([]);
-  const [loading, setLoading] = useState(true);
   const [filterCourse, setFilterCourse] = useState('');
   const [filterType, setFilterType] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -145,19 +148,21 @@ export function ScenariosABM() {
   // ── Data loading ────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    Promise.all([loadScenarios(), loadCourses()]).finally(() => setLoading(false));
-  }, [showInactive]);
+    loadCourses();
+  }, []);
 
-  const loadScenarios = async () => {
-    try {
-      const res = await apiClient.get(`/scenarios`);
-      setScenarios(Array.isArray(res.data) ? res.data : []);
-    } catch { setScenarios([]); }
-  };
+  // Sync showInactive filter to pagination
+  useEffect(() => {
+    const params: Record<string, unknown> = {};
+    if (showInactive) params.includeInactive = 'true';
+    if (filterCourse) params.course_id = filterCourse;
+    if (filterType) params.scenario_type = filterType;
+    setExtraParams(params);
+  }, [showInactive, filterCourse, filterType, setExtraParams]);
 
   const loadCourses = async () => {
     try {
-      const res = await apiClient.get('/courses');
+      const res = await apiClient.get('/courses/dropdown/list');
       setCourses(Array.isArray(res.data) ? res.data : []);
     } catch { setCourses([]); }
   };
@@ -189,7 +194,7 @@ export function ScenariosABM() {
       setDialogOpen(false);
       setEditingId(null);
       setForm(emptyForm());
-      await loadScenarios();
+      refresh();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Error al guardar el escenario');
     } finally {
@@ -230,7 +235,7 @@ export function ScenariosABM() {
         onClick: async () => {
           try {
             await apiClient.delete(`/scenarios/${id}`);
-            await loadScenarios();
+            refresh();
             toast.success('Escenario eliminado');
           } catch (err: any) {
             toast.error(err?.response?.data?.message || 'Error al eliminar');
@@ -244,7 +249,7 @@ export function ScenariosABM() {
   const handleReactivate = async (id: string) => {
     try {
       await apiClient.put(`/scenarios/${id}`, { is_active: true });
-      await loadScenarios();
+      refresh();
       toast.success('Escenario reactivado');
     } catch { toast.error('Error al reactivar'); }
   };
@@ -262,7 +267,7 @@ export function ScenariosABM() {
     };
     try {
       await apiClient.post('/scenarios', payload);
-      await loadScenarios();
+      refresh();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Error al duplicar');
     }
@@ -274,14 +279,9 @@ export function ScenariosABM() {
     setDialogOpen(true);
   };
 
-  // ── Filtered list ────────────────────────────────────────────────────────────
+  // ── Filtered list (server-side pagination handles filtering) ─────────────────
 
-  const filtered = scenarios.filter(s => {
-    if (filterCourse && s.course_id !== filterCourse) return false;
-    if (filterType && s.scenario_type !== filterType) return false;
-    if (!showInactive && s.is_active === false) return false;
-    return true;
-  });
+  const filtered = scenarios;
 
   const courseName = (id: string) => courses.find(c => c.id === id)?.title ?? id;
 
@@ -455,6 +455,42 @@ export function ScenariosABM() {
               </div>
             </Card>
           ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {total > 0 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-gray-500">{total} escenario{total !== 1 ? 's' : ''}</p>
+          {totalPages > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => page > 1 && setPage(page - 1)}
+                    className={page <= 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <PaginationItem key={p}>
+                    <PaginationLink
+                      isActive={p === page}
+                      onClick={() => setPage(p)}
+                      className="cursor-pointer"
+                    >
+                      {p}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => page < totalPages && setPage(page + 1)}
+                    className={page >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
         </div>
       )}
 

@@ -1,4 +1,5 @@
 'use client'
+import { PartnersStrip } from '@/components/PartnersStrip';
 import { SimulationCalendar } from '@/components/SimulationCalendar';
 import { StudentReviewModal } from '@/components/StudentReviewModal';
 import { Badge } from '@/components/ui/badge';
@@ -10,7 +11,6 @@ import { apiClient } from '@/services/ApiClient';
 import { Award, BookOpen, CalendarDays, CheckCircle2, Clock, Eye, GraduationCap, HelpCircle, Lock, MessageSquare, Play, Settings, Shield } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
 
 interface Course {
   id: string;
@@ -64,10 +64,6 @@ const Dashboard = () => {
   const [catalogPage, setCatalogPage] = useState(1);
   const [catalogTotal, setCatalogTotal] = useState(0);
   const CATALOG_LIMIT = 20;
-  const [enrollPasswords, setEnrollPasswords] = useState<Record<string, string>>({});
-  const [enrollingId, setEnrollingId] = useState<string | null>(null);
-  const [enrollError, setEnrollError] = useState('');
-  const [enrollErrorCourseId, setEnrollErrorCourseId] = useState<string | null>(null);
   const [showCatalog, setShowCatalog] = useState(false);
 
   useEffect(() => {
@@ -94,38 +90,6 @@ const Dashboard = () => {
     }
   };
 
-  const handleEnroll = async (courseId: string, requiresPassword: boolean) => {
-    setEnrollError('');
-    setEnrollErrorCourseId(null);
-    setEnrollingId(courseId);
-    try {
-      await apiClient.post(`/courses/${courseId}/enroll`, {
-        password: requiresPassword ? enrollPasswords[courseId] : undefined,
-      });
-      setEnrollPasswords((prev) => ({ ...prev, [courseId]: '' }));
-      // refresh assignments
-      if (user) {
-        const assignRes = await apiClient.get(`/assignments?student_id=${user.id}`);
-        const assignList: Assignment[] = assignRes.data || [];
-        setAssignments(assignList);
-        const coursesRes = await apiClient.get('/courses');
-        const allCourses: Course[] = coursesRes.data || [];
-        const assignedCourseIds = new Set(assignList.map((a: Assignment) => a.course_id));
-        setCourses(allCourses.filter((c) => assignedCourseIds.has(c.id)));
-        
-        setShowCatalog(false);
-        toast.success('¡Inscripción exitosa!');
-      }
-    } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || 'No se pudo inscribir al curso';
-      setEnrollError(msg);
-      setEnrollErrorCourseId(courseId);
-      toast.error(msg);
-    } finally {
-      setEnrollingId(null);
-    }
-  };
-
   useEffect(() => {
     if (!user || !isAuthenticated) return;
 
@@ -133,7 +97,7 @@ const Dashboard = () => {
       try {
         // Admin, docentes y ministerio ven todos los cursos directamente
         if (hasRole('admin') || hasRole('teacher') || hasRole('ministerio') || hasRole('supervisor')) {
-          const response = await apiClient.get('/courses');
+          const response = await apiClient.get('/courses/dropdown/list');
           setCourses(response.data);
           setAssignmentsLoaded(true);
           return;
@@ -141,8 +105,11 @@ const Dashboard = () => {
 
         // Para alumnos: verificar asignaciones primero
         const [assignRes, coursesRes] = await Promise.all([
-          apiClient.get(`/assignments?student_id=${user.id}`).then(r => r.data),
-          apiClient.get('/courses'),
+          apiClient.get(`/assignments?student_id=${user.id}`).then(r => {
+            const raw = r.data;
+            return Array.isArray(raw) ? raw : (raw?.data ?? []);
+          }),
+          apiClient.get('/courses/dropdown/list'),
         ]);
 
         const assignList: Assignment[] = assignRes || [];
@@ -240,7 +207,7 @@ const Dashboard = () => {
                 {showCatalog && !hasNoAssignments ? 'Inscribirse a un nuevo curso' : `¡Bienvenido/a, ${user?.name}!`}
               </h1>
               <p className="text-muted-foreground mt-2 text-lg">
-                Buscá un curso por nombre o docente e inscribite para comenzar.
+                Buscá un curso por nombre o docente para ver la información e inscribirte.
               </p>
             </div>
 
@@ -248,7 +215,7 @@ const Dashboard = () => {
               <CardHeader>
                 <CardTitle className="text-lg">Inscribirse a un curso</CardTitle>
                 <CardDescription>
-                  Si el curso tiene contraseña, el docente o admin te la compartirá.
+                  Elegí un curso para ver la información e inscribirte.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -266,12 +233,6 @@ const Dashboard = () => {
                   </Button>
                 </div>
 
-                {enrollError && (
-                  <div className="bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2 text-sm text-destructive">
-                    {enrollError}
-                  </div>
-                )}
-
                 {catalogLoading ? (
                   <p className="text-sm text-muted-foreground">Cargando cursos...</p>
                 ) : catalog.length === 0 ? (
@@ -279,11 +240,23 @@ const Dashboard = () => {
                 ) : (
                   <div className="space-y-3">
                     {catalog.map((c) => (
-                      <div key={c.id} className="rounded-lg border p-4 space-y-3">
+                      <div
+                        key={c.id}
+                        role="button"
+                        tabIndex={0}
+                        className="rounded-lg border p-4 space-y-3 cursor-pointer hover:border-primary/40 hover:bg-muted/30 transition-colors"
+                        onClick={() => router.push(`/curso/${c.id}`)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            router.push(`/curso/${c.id}`);
+                          }
+                        }}
+                      >
                         <div>
                           <h3 className="font-semibold">{c.title}</h3>
                           {c.description && (
-                            <p className="text-sm text-muted-foreground mt-1">{c.description}</p>
+                            <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{c.description}</p>
                           )}
                           <p className="text-xs text-muted-foreground mt-2">
                             Docentes:{' '}
@@ -298,7 +271,12 @@ const Dashboard = () => {
                                 <button
                                   key={`${tag}-${index}`}
                                   type="button"
-                                  onClick={() => { const next = catalogTag === tag ? '' : tag; setCatalogTag(next); loadCatalog(catalogQ, next, 1); }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const next = catalogTag === tag ? '' : tag;
+                                    setCatalogTag(next);
+                                    loadCatalog(catalogQ, next, 1);
+                                  }}
                                 >
                                   <Badge
                                     variant={catalogTag === tag ? 'default' : 'secondary'}
@@ -311,24 +289,14 @@ const Dashboard = () => {
                             </div>
                           )}
                         </div>
-                        {c.requires_password && (
-                          <Input
-                            type="password"
-                            placeholder="Contraseña del curso"
-                            value={enrollPasswords[c.id] || ''}
-                            onChange={(e) => {
-                              setEnrollPasswords((prev) => ({ ...prev, [c.id]: e.target.value }));
-                              if (enrollErrorCourseId === c.id) { setEnrollError(''); setEnrollErrorCourseId(null); }
-                            }}
-                            className={enrollErrorCourseId === c.id ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                          />
-                        )}
                         <Button
                           className="w-full"
-                          disabled={enrollingId === c.id}
-                          onClick={() => handleEnroll(c.id, c.requires_password)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/curso/${c.id}`);
+                          }}
                         >
-                          {enrollingId === c.id ? 'Inscribiendo...' : 'Inscribirme'}
+                          Ver curso
                         </Button>
                       </div>
                     ))}
@@ -413,6 +381,8 @@ const Dashboard = () => {
                 </div>
               </div>
             )}
+
+            <PartnersStrip includeEndorsers className="mb-6" />
 
             {courses.length === 0 ? (              <Card className="glass-card">
                 <CardContent className="flex flex-col items-center justify-center py-16">

@@ -40,16 +40,20 @@ export class PracticesService {
     });
   }
 
+  private practiceWhere(courseId: string) {
+    return {
+      course_id: courseId,
+      is_active: true,
+      OR: [
+        { scenario_type: 'practice' },
+        { agent_key: { startsWith: 'practica-' } },
+      ],
+    };
+  }
+
   async listByCourse(courseId: string) {
     const explicit = await this.prisma.scenario.findMany({
-      where: {
-        course_id: courseId,
-        is_active: true,
-        OR: [
-          { scenario_type: 'practice' },
-          { agent_key: { startsWith: 'practica-' } },
-        ],
-      },
+      where: this.practiceWhere(courseId),
       orderBy: { sequence_index: 'asc' },
     });
 
@@ -63,6 +67,49 @@ export class PracticesService {
     });
 
     return this.normalizePracticeScenarios(legacy);
+  }
+
+  /** Paginated list for admin ABM. Internal flows keep using listByCourse (full). */
+  async listByCoursePaginated(courseId: string, page = 1, limit = 20) {
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.min(100, Math.max(1, limit));
+    const skip = (safePage - 1) * safeLimit;
+
+    const explicitWhere = this.practiceWhere(courseId);
+    const explicitTotal = await this.prisma.scenario.count({ where: explicitWhere });
+
+    if (explicitTotal > 0) {
+      const rows = await this.prisma.scenario.findMany({
+        where: explicitWhere,
+        orderBy: { sequence_index: 'asc' },
+        skip,
+        take: safeLimit,
+      });
+      return {
+        data: this.normalizePracticeScenarios(rows),
+        total: explicitTotal,
+        page: safePage,
+        limit: safeLimit,
+      };
+    }
+
+    const legacyWhere = { course_id: courseId, is_active: true };
+    const [rows, total] = await Promise.all([
+      this.prisma.scenario.findMany({
+        where: legacyWhere,
+        orderBy: { sequence_index: 'asc' },
+        skip,
+        take: safeLimit,
+      }),
+      this.prisma.scenario.count({ where: legacyWhere }),
+    ]);
+
+    return {
+      data: this.normalizePracticeScenarios(rows),
+      total,
+      page: safePage,
+      limit: safeLimit,
+    };
   }
 
   private async getCompletedScenarioIds(
