@@ -1,4 +1,5 @@
 'use client'
+import { PartnersStrip } from '@/components/PartnersStrip';
 import { SimulationCalendar } from '@/components/SimulationCalendar';
 import { StudentReviewModal } from '@/components/StudentReviewModal';
 import { Badge } from '@/components/ui/badge';
@@ -380,6 +381,8 @@ const Dashboard = () => {
                 </div>
               </div>
             )}
+
+            <PartnersStrip includeEndorsers className="mb-6" />
 
             {courses.length === 0 ? (              <Card className="glass-card">
                 <CardContent className="flex flex-col items-center justify-center py-16">

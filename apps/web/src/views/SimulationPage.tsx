@@ -1,4 +1,5 @@
 'use client'
+import { PartnersStrip } from '@/components/PartnersStrip';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -533,6 +534,7 @@ const SimulationPage: React.FC = () => {
           </div>
         </div>
         <main className="container mx-auto px-4 py-12 max-w-lg">
+          <PartnersStrip courseId={courseId} className="mb-6" />
           <Card>
             <CardHeader>
               <CardTitle>Sin prácticas disponibles</CardTitle>
@@ -683,6 +685,8 @@ const SimulationPage: React.FC = () => {
             )}
           </Card>
         )}
+
+        <PartnersStrip courseId={courseId} className="mb-6" />
 
         {/* Dynamic tabs driven by course.modules */}
         {(() => {

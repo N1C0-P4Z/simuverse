@@ -1,7 +1,8 @@
 'use client'
+import { PartnersStrip } from '@/components/PartnersStrip';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
-import { ArrowRight, BarChart3, BookOpen, Settings, Shield, Zap } from 'lucide-react';
+import { ArrowRight, BarChart3, BookOpen, Settings, Zap } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 const Index = () => {
@@ -13,8 +14,8 @@ const Index = () => {
       {/* Hero */}
       <div className="flex-1 flex items-center justify-center px-4">
         <div className="max-w-3xl text-center fade-in">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-primary/10 mb-6">
-            <Shield className="w-10 h-10 text-primary" />
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl mb-6">
+            <img src="/logos/fundacion-logo.svg" alt="SimuVerse" className="w-10 h-10 object-contain" />
           </div>
           <h1 className="text-5xl md:text-6xl font-bold tracking-tight mb-4">
             SimuVerse
@@ -23,6 +24,7 @@ const Index = () => {
           <p className="text-lg text-muted-foreground max-w-xl mx-auto mb-8">
             Plataforma educativa inmersiva con IA. Simulaciones adaptables para prácticas profesionalizantes.
           </p>
+          <PartnersStrip includeEndorsers className="mb-8" />
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button size="lg" onClick={() => router.push('/auth')} className="gap-2" disabled={loading}>
               {loading ? 'Cargando...' : 'Comenzar'} <ArrowRight className="w-4 h-4" />

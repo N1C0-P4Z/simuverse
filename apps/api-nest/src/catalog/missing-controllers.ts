@@ -5,6 +5,7 @@ import { logoUploadOptions, resolveLogoUrl, cleanupOldLogo } from '../files/logo
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { LegajoStudentsQueryDto } from './dto/legajo-students-query.dto';
 import { paginate } from '../common/helpers/paginate';
+import { Public } from '../common/decorators/public.decorator';
 
 // ── Foundation Config ────────────────────────────────────────────
 @Controller('foundation-config')
@@ -90,6 +91,22 @@ export class FoundationConfigController {
 @Controller('endorsers')
 export class EndorsersController {
   constructor(private prisma: PrismaService) {}
+
+  @Get('active')
+  @Public()
+  async findActive() {
+    return (this.prisma as any).endorser.findMany({
+      where: { is_active: { not: false } },
+      select: {
+        id: true,
+        name: true,
+        short_name: true,
+        logo_url: true,
+        website: true,
+      },
+      orderBy: { id: 'asc' },
+    });
+  }
 
   @Get() async findAll(@Query() pagination: PaginationDto) {
     return paginate((this.prisma as any).endorser, {}, {
