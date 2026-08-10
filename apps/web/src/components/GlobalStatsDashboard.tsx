@@ -2,7 +2,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiClient } from '@/services/ApiClient';
-import { AlertCircle, BarChart3, BookOpen, CheckCircle2, Clock, Star, TrendingUp, Users } from 'lucide-react';
+import { AlertCircle, BarChart3, BookOpen, CheckCircle2, Clock, Star, TrendingUp, Users, XCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface GlobalStats {
@@ -16,14 +16,38 @@ interface GlobalStats {
   top_students: Array<{ name: string; avg_score: string; sims: number }>;
 }
 
+function toUserCount(count: number | Record<string, unknown> | undefined): number {
+  if (typeof count === 'number' && !Number.isNaN(count)) return count;
+  if (count && typeof count === 'object') {
+    const c = count as Record<string, number | undefined>;
+    const n = c._all ?? c.role ?? c.id;
+    if (typeof n === 'number') return n;
+  }
+  const parsed = Number(count);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 export function GlobalStatsDashboard() {
   const [stats, setStats] = useState<GlobalStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
 
   useEffect(() => {
     apiClient.get('/global-stats')
       .then(r => { setStats(r.data); setLoading(false); })
-      .catch(() => setLoading(false));
+      .catch((err: { response?: { status?: number; data?: { message?: string | string[] } }; message?: string }) => {
+        const status = err?.response?.status;
+        const message = err?.response?.data?.message;
+        const parts = [
+          status ? `HTTP ${status}` : null,
+          message
+            ? (Array.isArray(message) ? message.join(', ') : String(message))
+            : null,
+          !message && err?.message ? err.message : null,
+        ].filter(Boolean);
+        setErrorDetail(parts.length > 0 ? parts.join(' — ') : null);
+        setLoading(false);
+      });
   }, []);
 
   if (loading) return (
@@ -32,7 +56,14 @@ export function GlobalStatsDashboard() {
     </div>
   );
 
-  if (!stats) return <p className="text-muted-foreground text-center py-8">No se pudieron cargar las estadísticas.</p>;
+  if (!stats) return (
+    <div className="text-center py-8">
+      <p className="text-muted-foreground">No se pudieron cargar las estadísticas.</p>
+      {errorDetail && (
+        <p className="text-xs text-muted-foreground mt-2">{errorDetail}</p>
+      )}
+    </div>
+  );
 
   const roleMap: Record<string, { label: string; color: string }> = {
     admin: { label: 'Administradores', color: 'bg-purple-100 text-purple-800' },
@@ -41,7 +72,7 @@ export function GlobalStatsDashboard() {
     ministerio: { label: 'Ministerio', color: 'bg-yellow-100 text-yellow-800' },
   };
 
-  const totalUsers = stats.users.reduce((a, u) => a + Number(u.count), 0);
+  const totalUsers = stats.users.reduce((a, u) => a + toUserCount(u.count), 0);
   const scoreNum = Number(stats.avg_score);
   const scoreColor = scoreNum >= 85 ? 'text-green-600' : scoreNum >= 70 ? 'text-yellow-600' : 'text-red-600';
 
@@ -155,8 +186,12 @@ export function GlobalStatsDashboard() {
               <div className="h-full bg-red-300 flex-1" />
             </div>
             <div className="flex justify-between text-xs text-muted-foreground mt-1">
-              <span className="text-green-700 font-medium">✅ {stats.approval_rate}% Aprobados</span>
-              <span className="text-red-600 font-medium">❌ {100 - stats.approval_rate}% No aprobados</span>
+              <span className="text-green-700 font-medium inline-flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" /> {stats.approval_rate}% Aprobados
+              </span>
+              <span className="text-red-600 font-medium inline-flex items-center gap-1">
+                <XCircle className="w-3.5 h-3.5" /> {100 - stats.approval_rate}% No aprobados
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -176,7 +211,7 @@ export function GlobalStatsDashboard() {
                 <Badge className={`${roleMap[u.role]?.color || 'bg-gray-100 text-gray-700'} border-0 text-xs`}>
                   {roleMap[u.role]?.label || u.role}
                 </Badge>
-                <span className="font-bold text-lg">{u.count}</span>
+                <span className="font-bold text-lg">{toUserCount(u.count)}</span>
               </div>
             ))}
           </CardContent>
