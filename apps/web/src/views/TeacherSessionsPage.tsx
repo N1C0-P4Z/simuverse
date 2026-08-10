@@ -280,7 +280,7 @@ export default function TeacherSessionsPage() {
                   {detail.instance.agent_key || detail.instance.scenario_title}
                 </p>
                 <p className="text-xs mt-1">
-                  {detail.summary.total_turns} turnos · {detail.summary.student_turns} del
+                  {detail.summary.total_turns} mensajes · {detail.summary.student_turns} del
                   alumno
                 </p>
                 {detail.instance.practice_summary && (
