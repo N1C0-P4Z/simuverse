@@ -43,7 +43,7 @@ interface UserRow {
 
 export function UsersABM() {
   const { readOnly } = useAdmin();
-  const { data: users, total, page, totalPages, setPage, loading, error, setExtraParams } = usePagination<UserRow>({
+  const { data: users, total, page, totalPages, setPage, loading, error, setExtraParams, refresh } = usePagination<UserRow>({
     endpoint: '/users',
   });
   const [rolesList, setRolesList] = useState<any[]>([]);
@@ -94,7 +94,7 @@ export function UsersABM() {
       await apiClient.put(`/users/${editingId}`, payload);
       toast.success('Usuario actualizado');
       setDialogOpen(false);
-      setPage(page); // trigger re-fetch
+      refresh();
     } catch (e: any) {
       toast.error(e.message || 'Error al guardar');
     }
@@ -106,7 +106,7 @@ export function UsersABM() {
       await apiClient.delete(`/users/${id}`);
       toast.success('Usuario eliminado');
       setDeleteConfirm(null);
-      setPage(page); // trigger re-fetch
+      refresh();
     } catch { toast.error('Error al eliminar usuario'); }
   };
 
@@ -115,7 +115,7 @@ export function UsersABM() {
       await apiClient.put(`/users/${id}/reactivate`);
       toast.success('Usuario reactivado');
       setDeleteConfirm(null);
-      setPage(page); // trigger re-fetch
+      refresh();
     } catch { toast.error('Error al reactivar usuario'); }
   };
 
@@ -124,7 +124,7 @@ export function UsersABM() {
       await apiClient.delete(`/users/${id}/hard`);
       toast.success('Usuario eliminado permanentemente');
       setHardDeleteConfirm(null);
-      setPage(page); // trigger re-fetch
+      refresh();
     } catch (e: any) { toast.error(e.message || 'Error al eliminar usuario'); }
   };
 

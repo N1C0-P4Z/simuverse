@@ -78,7 +78,7 @@ function LogoDisplay({ name, logoUrl, size = 'md' }: { name: string; logoUrl?: s
 
 export function EndorsersABM() {
   const { readOnly } = useAdmin();
-  const { data: endorsers, total, page, totalPages, setPage, loading, error } = usePagination<Endorser>({
+  const { data: endorsers, total, page, totalPages, setPage, loading, error, refresh } = usePagination<Endorser>({
     endpoint: '/endorsers',
   });
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -114,7 +114,7 @@ export function EndorsersABM() {
       setForm(emptyForm());
       setLogoFile(null);
       setEditingId(null);
-      setPage(page); // trigger re-fetch
+      refresh();
     } catch (e: any) { toast.error(e.message); }
     setSaving(false);
   };
@@ -134,7 +134,7 @@ export function EndorsersABM() {
           try {
             await apiClient.delete(`/endorsers/${id}`);
             toast.success('Auspiciante desactivado');
-            setPage(page); // trigger re-fetch
+            refresh();
           } catch { toast.error('Error al desactivar'); }
         },
       },
@@ -145,7 +145,7 @@ export function EndorsersABM() {
   const handleReactivate = async (id: number) => {
     try {
       await apiClient.put(`/endorsers/${id}/reactivate`);
-      setPage(page); // trigger re-fetch
+      refresh();
       toast.success('Auspiciante reactivado');
     } catch { toast.error('Error al reactivar'); }
   };

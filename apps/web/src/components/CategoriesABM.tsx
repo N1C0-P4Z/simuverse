@@ -33,10 +33,9 @@ interface Category {
 
 export function CategoriesABM() {
   const { readOnly } = useAdmin();
-  const { data: categories, total, page, totalPages, setPage, loading } = usePagination<Category>({
+  const { data: categories, total, page, totalPages, setPage, loading, refresh } = usePagination<Category>({
     endpoint: '/categories',
   });
-  const refreshList = () => setPage(page);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
@@ -70,7 +69,7 @@ export function CategoriesABM() {
       setIsAddingNew(false);
 
       // Refresh list
-      refreshList();
+      refresh();
     } catch (error) {
       console.error('Error saving category:', error);
       toast.error('Error al guardar la categoría');
@@ -85,7 +84,7 @@ export function CategoriesABM() {
     if (!deletingCategory) return;
     try {
       await apiClient.delete(`/categories/${deletingCategory.id}`);
-      refreshList();
+      refresh();
       toast.success('Categoría desactivada');
     } catch (error) {
       console.error('Error deleting category:', error);
@@ -98,7 +97,7 @@ export function CategoriesABM() {
   const handleReactivate = async (id: number) => {
     try {
       await apiClient.put(`/categories/${id}/reactivate`);
-      refreshList();
+      refresh();
       toast.success('Categoría reactivada');
     } catch { toast.error('Error al reactivar'); }
   };
@@ -342,7 +341,7 @@ export function CategoriesABM() {
                   await apiClient.delete(`/categories/${hardDeleteCategory.id}/hard`);
                   toast.success('Categoría eliminada permanentemente');
                   setHardDeleteCategory(null);
-                  refreshList();
+                  refresh();
                 } catch { toast.error('Error al eliminar'); }
               }}>
               Sí, eliminar permanentemente

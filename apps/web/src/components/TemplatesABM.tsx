@@ -149,7 +149,7 @@ const AI_QUESTIONS = [
 
 export function TemplatesABM() {
   const { readOnly } = useAdmin();
-  const { data: templates, total, page, totalPages, setPage, loading, setExtraParams } = usePagination<Template>({
+  const { data: templates, total, page, totalPages, setPage, loading, setExtraParams, refresh } = usePagination<Template>({
     endpoint: '/templates/flow',
   });
   const [aiDialogOpen, setAiDialogOpen] = useState(false);
@@ -193,8 +193,6 @@ export function TemplatesABM() {
   const [newCriteria, setNewCriteria] = useState('');
 
   // ── Data ─────────────────────────────────────────────────────────────────────
-
-  const refreshList = () => setPage(page);
 
   // ── AI Wizard ─────────────────────────────────────────────────────────────────
 
@@ -326,7 +324,7 @@ export function TemplatesABM() {
       }
       setEditDialogOpen(false);
       setEditingId(null);
-      refreshList();
+      refresh();
     } catch { toast.error('Error al guardar la plantilla'); }
     finally { setSaving(false); }
   };
@@ -338,7 +336,7 @@ export function TemplatesABM() {
         onClick: async () => {
           try {
             await apiClient.delete(`/templates/flow/${id}`);
-            refreshList();
+            refresh();
             toast.success('Plantilla eliminada');
           } catch { toast.error('Error al eliminar la plantilla'); }
         },
@@ -350,7 +348,7 @@ export function TemplatesABM() {
   const handleReactivate = async (id: string) => {
     try {
       await apiClient.put(`/templates/flow/${id}`, { is_active: true });
-      refreshList();
+      refresh();
       toast.success('Plantilla reactivada');
     } catch { toast.error('Error al reactivar'); }
   };
@@ -367,7 +365,7 @@ export function TemplatesABM() {
       version: t.version,
       template_data: JSON.stringify(data),
     });
-    refreshList();
+    refresh();
   };
 
   const handleEdit = (t: Template) => {

@@ -126,7 +126,7 @@ const diffBadgeClass = (d: string) => ({
 
 export function ScenariosABM() {
   const { readOnly } = useAdmin();
-  const { data: scenarios, total, page, totalPages, setPage, loading, setExtraParams } = usePagination<Scenario>({
+  const { data: scenarios, total, page, totalPages, setPage, loading, setExtraParams, refresh } = usePagination<Scenario>({
     endpoint: '/scenarios',
   });
   const [courses, setCourses] = useState<Course[]>([]);
@@ -146,8 +146,6 @@ export function ScenariosABM() {
   const [newKpi, setNewKpi] = useState({ name: '', threshold: 70, description: '' });
 
   // ── Data loading ────────────────────────────────────────────────────────────
-
-  const refreshList = () => setPage(page);
 
   useEffect(() => {
     loadCourses();
@@ -196,7 +194,7 @@ export function ScenariosABM() {
       setDialogOpen(false);
       setEditingId(null);
       setForm(emptyForm());
-      refreshList();
+      refresh();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Error al guardar el escenario');
     } finally {
@@ -237,7 +235,7 @@ export function ScenariosABM() {
         onClick: async () => {
           try {
             await apiClient.delete(`/scenarios/${id}`);
-            refreshList();
+            refresh();
             toast.success('Escenario eliminado');
           } catch (err: any) {
             toast.error(err?.response?.data?.message || 'Error al eliminar');
@@ -251,7 +249,7 @@ export function ScenariosABM() {
   const handleReactivate = async (id: string) => {
     try {
       await apiClient.put(`/scenarios/${id}`, { is_active: true });
-      refreshList();
+      refresh();
       toast.success('Escenario reactivado');
     } catch { toast.error('Error al reactivar'); }
   };
@@ -269,7 +267,7 @@ export function ScenariosABM() {
     };
     try {
       await apiClient.post('/scenarios', payload);
-      refreshList();
+      refresh();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Error al duplicar');
     }
