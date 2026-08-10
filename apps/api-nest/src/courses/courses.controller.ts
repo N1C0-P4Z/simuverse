@@ -22,6 +22,7 @@ import { Permissions } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { PaginationDto } from '../common/dto/pagination.dto';
+import { UpdateCourseRubricDto } from '../rubrics/dto/update-course-rubric.dto';
 
 class CreateCourseDto {
   @IsString()
@@ -231,6 +232,16 @@ export class CoursesController {
   @Roles('admin', 'teacher', 'ministerio', 'student')
   async getRubric(@Param('courseId') courseId: string) {
     return this.rubricService.getActiveRubricForCourse(courseId);
+  }
+
+  @Put(':courseId/rubric')
+  @Roles('admin', 'teacher')
+  @Permissions('courses.manage')
+  async updateRubric(
+    @Param('courseId') courseId: string,
+    @Body() dto: UpdateCourseRubricDto,
+  ) {
+    return this.rubricService.updateRubric(courseId, dto);
   }
 
   @Get(':courseId')

@@ -8,6 +8,7 @@ import {
   DEFAULT_RUBRIC_NAME,
   LEGACY_RUBRIC_NAME,
 } from './default-rubric.data';
+import { UpdateCourseRubricDto } from './dto/update-course-rubric.dto';
 
 export type RubricScores = Record<string, number>;
 
@@ -173,6 +174,265 @@ export class CourseRubricService {
       passed,
       pass_threshold: rubric.pass_threshold,
     };
+  }
+
+  validateUpdatePayload(dto: UpdateCourseRubricDto): void {
+    const activeLevels = dto.levels.filter((l) => l.active !== false);
+    const activeCriteria = dto.criteria.filter((c) => c.active !== false);
+
+    if (!activeLevels.length) {
+      throw new BadRequestException('At least one active level is required');
+    }
+    if (!activeCriteria.length) {
+      throw new BadRequestException('At least one active criterion is required');
+    }
+
+    const levelValues = activeLevels.map((l) => l.value);
+    if (new Set(levelValues).size !== levelValues.length) {
+      throw new BadRequestException('Active level values must be unique');
+    }
+
+    const codes = activeCriteria.map((c) => c.code);
+    if (new Set(codes).size !== codes.length) {
+      throw new BadRequestException('Active criterion codes must be unique');
+    }
+
+    const activeLevelValues = new Set(levelValues);
+    for (const criterion of activeCriteria) {
+      for (const levelValue of activeLevelValues) {
+        const hasDescriptor = criterion.descriptors.some(
+          (d) => d.level_value === levelValue && d.descriptor.trim().length > 0,
+        );
+        if (!hasDescriptor) {
+          throw new BadRequestException(
+            `Criterion ${criterion.code} is missing a descriptor for level value ${levelValue}`,
+          );
+        }
+      }
+    }
+
+    const maxLevelValue = Math.max(...levelValues);
+    const maxScore = activeCriteria.length * maxLevelValue;
+    if (dto.pass_threshold < 1 || dto.pass_threshold > maxScore) {
+      throw new BadRequestException(
+        `pass_threshold must be between 1 and ${maxScore}`,
+      );
+    }
+  }
+
+  async updateRubric(courseId: string, dto: UpdateCourseRubricDto) {
+    const course = await this.resolveCourse(courseId);
+    this.validateUpdatePayload(dto);
+
+    let rubric = await this.prisma.courseRubric.findFirst({
+      where: { course_id: course.id, active: true },
+    });
+    if (!rubric) {
+      await this.cloneDefaultRubricToCourse(courseId);
+      rubric = await this.prisma.courseRubric.findFirst({
+        where: { course_id: course.id, active: true },
+      });
+    }
+    if (!rubric) {
+      throw new NotFoundException('Active rubric not found for course');
+    }
+
+    const existing = await this.prisma.courseRubric.findUnique({
+      where: { id: rubric.id },
+      include: {
+        levels: { orderBy: { sort_order: 'asc' } },
+        criteria: {
+          orderBy: { sort_order: 'asc' },
+          include: { descriptors: true },
+        },
+      },
+    });
+    if (!existing) {
+      throw new NotFoundException('Active rubric not found for course');
+    }
+
+    const existingCriterionById = new Map(existing.criteria.map((c) => [c.id, c]));
+    const dtoLevelIds = new Set(dto.levels.filter((l) => l.id).map((l) => l.id!));
+    const dtoCriterionIds = new Set(dto.criteria.filter((c) => c.id).map((c) => c.id!));
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.courseRubric.update({
+        where: { id: existing.id },
+        data: { name: dto.name, pass_threshold: dto.pass_threshold },
+      });
+
+      for (const level of existing.levels) {
+        if (!dtoLevelIds.has(level.id)) {
+          await tx.rubricLevel.update({
+            where: { id: level.id },
+            data: { active: false },
+          });
+        }
+      }
+
+      const levelIdByValue = new Map<number, string>();
+
+      for (const levelDto of dto.levels) {
+        const isActive = levelDto.active !== false;
+        if (levelDto.id) {
+          const updated = await tx.rubricLevel.update({
+            where: { id: levelDto.id },
+            data: {
+              value: levelDto.value,
+              label: levelDto.label,
+              description: levelDto.description ?? null,
+              sort_order: levelDto.sort_order,
+              active: isActive,
+            },
+          });
+          if (isActive) levelIdByValue.set(updated.value, updated.id);
+        } else {
+          const created = await tx.rubricLevel.create({
+            data: {
+              id: crypto.randomUUID(),
+              course_rubric_id: existing.id,
+              value: levelDto.value,
+              label: levelDto.label,
+              description: levelDto.description ?? null,
+              sort_order: levelDto.sort_order,
+              active: isActive,
+            },
+          });
+          if (isActive) levelIdByValue.set(created.value, created.id);
+        }
+      }
+
+      for (const criterion of existing.criteria) {
+        if (!dtoCriterionIds.has(criterion.id)) {
+          await tx.rubricCriterion.update({
+            where: { id: criterion.id },
+            data: { active: false },
+          });
+        }
+      }
+
+      const criterionIdByCode = new Map<string, string>();
+
+      for (const criterionDto of dto.criteria) {
+        const isActive = criterionDto.active !== false;
+        const existingCriterion = criterionDto.id
+          ? existingCriterionById.get(criterionDto.id)
+          : undefined;
+        const code = existingCriterion ? existingCriterion.code : criterionDto.code;
+
+        let criterionId: string;
+        if (criterionDto.id && existingCriterion) {
+          const updated = await tx.rubricCriterion.update({
+            where: { id: criterionDto.id },
+            data: {
+              label: criterionDto.label,
+              description: criterionDto.description ?? null,
+              sort_order: criterionDto.sort_order,
+              active: isActive,
+            },
+          });
+          criterionId = updated.id;
+        } else {
+          const created = await tx.rubricCriterion.create({
+            data: {
+              id: crypto.randomUUID(),
+              course_rubric_id: existing.id,
+              code: criterionDto.code,
+              label: criterionDto.label,
+              description: criterionDto.description ?? null,
+              sort_order: criterionDto.sort_order,
+              active: isActive,
+            },
+          });
+          criterionId = created.id;
+        }
+
+        if (isActive) criterionIdByCode.set(code, criterionId);
+
+        const wantedDescriptors = new Map<number, string>();
+        for (const d of criterionDto.descriptors) {
+          wantedDescriptors.set(d.level_value, d.descriptor);
+        }
+
+        const activeLevelValues = dto.levels
+          .filter((l) => l.active !== false)
+          .map((l) => l.value);
+
+        for (const levelValue of activeLevelValues) {
+          const levelId = levelIdByValue.get(levelValue);
+          if (!levelId) continue;
+          const descriptor = wantedDescriptors.get(levelValue);
+          if (!descriptor) continue;
+
+          const existingDescriptor = existing.criteria
+            .flatMap((c) => c.descriptors)
+            .find((d) => d.criterion_id === criterionId && d.level_id === levelId);
+
+          if (existingDescriptor) {
+            await tx.rubricCriterionLevelDescriptor.update({
+              where: { id: existingDescriptor.id },
+              data: { descriptor },
+            });
+          } else {
+            await tx.rubricCriterionLevelDescriptor.create({
+              data: {
+                id: crypto.randomUUID(),
+                criterion_id: criterionId,
+                level_id: levelId,
+                descriptor,
+              },
+            });
+          }
+        }
+      }
+
+      const allCriteria = await tx.rubricCriterion.findMany({
+        where: { course_rubric_id: existing.id },
+        include: { descriptors: true },
+      });
+      const allLevels = await tx.rubricLevel.findMany({
+        where: { course_rubric_id: existing.id },
+      });
+      const activeLevelIds = new Set(
+        allLevels.filter((l) => l.active).map((l) => l.id),
+      );
+      const activeCriterionIds = new Set(
+        allCriteria.filter((c) => c.active).map((c) => c.id),
+      );
+
+      const validPairs = new Set<string>();
+      for (const criterionDto of dto.criteria) {
+        if (criterionDto.active === false) continue;
+        const existingCriterion = criterionDto.id
+          ? existingCriterionById.get(criterionDto.id)
+          : undefined;
+        const code = existingCriterion ? existingCriterion.code : criterionDto.code;
+        const criterionId = criterionIdByCode.get(code);
+        if (!criterionId) continue;
+        for (const levelDto of dto.levels) {
+          if (levelDto.active === false) continue;
+          const levelId = levelIdByValue.get(levelDto.value);
+          if (levelId) validPairs.add(`${criterionId}:${levelId}`);
+        }
+      }
+
+      for (const criterion of allCriteria) {
+        for (const descriptor of criterion.descriptors) {
+          const pairKey = `${descriptor.criterion_id}:${descriptor.level_id}`;
+          const isOrphan =
+            !activeCriterionIds.has(descriptor.criterion_id) ||
+            !activeLevelIds.has(descriptor.level_id) ||
+            !validPairs.has(pairKey);
+          if (isOrphan) {
+            await tx.rubricCriterionLevelDescriptor.delete({
+              where: { id: descriptor.id },
+            });
+          }
+        }
+      }
+    });
+
+    return this.getActiveRubricForCourse(courseId);
   }
 
   async ensureActiveRubric(courseId: string) {
