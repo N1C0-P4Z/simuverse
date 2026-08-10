@@ -3,6 +3,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { PrismaService } from '../prisma/prisma.service';
 import { logoUploadOptions, resolveLogoUrl, cleanupOldLogo } from '../files/logo-upload';
 import { PaginationDto } from '../common/dto/pagination.dto';
+import { LegajoStudentsQueryDto } from './dto/legajo-students-query.dto';
 import { paginate } from '../common/helpers/paginate';
 
 // ── Foundation Config ────────────────────────────────────────────
@@ -159,13 +160,9 @@ export class LegajoController {
   constructor(private prisma: PrismaService) {}
 
   @Get('students')
-  async getStudents(
-    @Query() pagination: PaginationDto,
-    @Query('course_id') courseId?: string,
-    @Query('teacher_id') teacherId?: string,
-    @Query('search') search?: string,
-  ) {
-    const empty = { data: [], total: 0, page: pagination.page, limit: pagination.limit };
+  async getStudents(@Query() query: LegajoStudentsQueryDto) {
+    const { course_id: courseId, teacher_id: teacherId, search } = query;
+    const empty = { data: [], total: 0, page: query.page, limit: query.limit };
 
     // Resolve student IDs from filters
     let studentIds: string[] | undefined;
@@ -207,8 +204,8 @@ export class LegajoController {
     }
 
     const result = await paginate((this.prisma as any).user, where, {
-      page: pagination.page,
-      limit: pagination.limit,
+      page: query.page,
+      limit: query.limit,
       select: {
         id: true, name: true, email: true, created_at: true,
         simulations: { select: { id: true, status: true, score: true, progress_percentage: true, started_at: true } },
