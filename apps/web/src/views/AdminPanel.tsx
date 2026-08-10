@@ -150,6 +150,7 @@ const AdminPanel = ({ tabId }: { tabId?: string }) => {
     totalPages: coursesTotalPages,
     setPage: setCoursesPage,
     setExtraParams: setCoursesExtraParams,
+    refresh: refreshCourses,
     loading: loadingCourses,
   } = usePagination<any>({
     endpoint: '/courses',
@@ -167,8 +168,6 @@ const AdminPanel = ({ tabId }: { tabId?: string }) => {
   useEffect(() => {
     if (!loading && (!user || (!hasRole('admin') && !hasRole('ministerio')))) router.push('/auth');
   }, [user, loading, hasRole, router]);
-
-  const refreshCourses = () => setCoursesPage(coursesPage);
 
   useEffect(() => {
     if (courseFilter === 'active') {
