@@ -1,4 +1,5 @@
-export const DEFAULT_RUBRIC_NAME = 'Rúbrica base Gustavo';
+export const DEFAULT_RUBRIC_NAME = 'Rubrica Base';
+export const LEGACY_RUBRIC_NAME = 'Rúbrica base Gustavo';
 export const DEFAULT_PASS_THRESHOLD = 24;
 
 export const DEFAULT_RUBRIC_LEVELS = [

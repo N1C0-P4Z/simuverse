@@ -3,6 +3,8 @@ import {
   DEFAULT_PASS_THRESHOLD,
   DEFAULT_RUBRIC_CRITERIA,
   DEFAULT_RUBRIC_LEVELS,
+  DEFAULT_RUBRIC_NAME,
+  LEGACY_RUBRIC_NAME,
 } from './default-rubric.data';
 
 describe('CourseRubricService', () => {
@@ -29,6 +31,7 @@ describe('CourseRubricService', () => {
       courseRubric: {
         findFirst: jest.fn(),
         create: jest.fn(),
+        update: jest.fn(),
       },
       rubricLevel: { create: jest.fn() },
       rubricCriterion: { create: jest.fn() },
@@ -76,14 +79,61 @@ describe('CourseRubricService', () => {
     });
   });
 
+  describe('getActiveRubricForCourse', () => {
+    it('renames legacy rubric name on read', async () => {
+      prisma.course.findUnique.mockResolvedValue({ id: 'course-1' });
+      prisma.courseRubric.findFirst.mockResolvedValue({
+        id: 'rubric-1',
+        course_id: 'course-1',
+        name: LEGACY_RUBRIC_NAME,
+        pass_threshold: DEFAULT_PASS_THRESHOLD,
+        active: true,
+        created_at: new Date('2026-01-01'),
+        criteria: [],
+        levels: [],
+      });
+      prisma.courseRubric.update.mockResolvedValue({});
+
+      const result = await service.getActiveRubricForCourse('course-1');
+
+      expect(prisma.courseRubric.update).toHaveBeenCalledWith({
+        where: { id: 'rubric-1' },
+        data: { name: DEFAULT_RUBRIC_NAME },
+      });
+      expect(result.name).toBe(DEFAULT_RUBRIC_NAME);
+    });
+  });
+
   describe('cloneDefaultRubricToCourse', () => {
     it('returns existing active rubric without creating', async () => {
       prisma.course.findUnique.mockResolvedValue({ id: 'course-1' });
-      prisma.courseRubric.findFirst.mockResolvedValue({ id: 'rubric-1' });
+      prisma.courseRubric.findFirst.mockResolvedValue({ id: 'rubric-1', name: DEFAULT_RUBRIC_NAME });
 
       const result = await service.cloneDefaultRubricToCourse('course-1');
 
-      expect(result).toEqual({ id: 'rubric-1' });
+      expect(result).toEqual({ id: 'rubric-1', name: DEFAULT_RUBRIC_NAME });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.courseRubric.update).not.toHaveBeenCalled();
+    });
+
+    it('renames legacy rubric name when existing active rubric found', async () => {
+      prisma.course.findUnique.mockResolvedValue({ id: 'course-1' });
+      prisma.courseRubric.findFirst.mockResolvedValue({
+        id: 'rubric-1',
+        name: LEGACY_RUBRIC_NAME,
+      });
+      prisma.courseRubric.update.mockResolvedValue({
+        id: 'rubric-1',
+        name: DEFAULT_RUBRIC_NAME,
+      });
+
+      const result = await service.cloneDefaultRubricToCourse('course-1');
+
+      expect(prisma.courseRubric.update).toHaveBeenCalledWith({
+        where: { id: 'rubric-1' },
+        data: { name: DEFAULT_RUBRIC_NAME },
+      });
+      expect(result).toEqual({ id: 'rubric-1', name: DEFAULT_RUBRIC_NAME });
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
@@ -106,6 +156,7 @@ describe('CourseRubricService', () => {
         expect.objectContaining({
           data: expect.objectContaining({
             course_id: 'course-1',
+            name: DEFAULT_RUBRIC_NAME,
             pass_threshold: 24,
             active: true,
           }),

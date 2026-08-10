@@ -6,6 +6,7 @@ import {
   DEFAULT_RUBRIC_CRITERIA,
   DEFAULT_RUBRIC_LEVELS,
   DEFAULT_RUBRIC_NAME,
+  LEGACY_RUBRIC_NAME,
 } from './default-rubric.data';
 
 export type RubricScores = Record<string, number>;
@@ -48,7 +49,8 @@ export class CourseRubricService {
     if (!rubric) {
       throw new NotFoundException('Active rubric not found for course');
     }
-    return this.formatRubric(rubric);
+    const synced = await this.syncRubricNameIfLegacy(rubric);
+    return this.formatRubric(synced);
   }
 
   async cloneDefaultRubricToCourse(courseId: string) {
@@ -58,7 +60,7 @@ export class CourseRubricService {
       where: { course_id: course.id, active: true },
     });
     if (existing) {
-      return existing;
+      return this.syncRubricNameIfLegacy(existing);
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -236,6 +238,17 @@ export class CourseRubricService {
         ),
       })),
     };
+  }
+
+  private async syncRubricNameIfLegacy<T extends { id: string; name: string }>(rubric: T): Promise<T> {
+    if (rubric.name !== LEGACY_RUBRIC_NAME) {
+      return rubric;
+    }
+    await this.prisma.courseRubric.update({
+      where: { id: rubric.id },
+      data: { name: DEFAULT_RUBRIC_NAME },
+    });
+    return { ...rubric, name: DEFAULT_RUBRIC_NAME };
   }
 
   private async resolveCourse(courseId: string) {
