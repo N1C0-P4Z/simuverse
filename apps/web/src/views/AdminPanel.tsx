@@ -1,6 +1,7 @@
 'use client'
 import { AssignmentsABM } from '@/components/AssignmentsABM';
 import { CategoriesABM } from '@/components/CategoriesABM';
+import { CourseRubricABM } from '@/components/CourseRubricABM';
 import { CompaniesABM } from '@/components/CompaniesABM';
 import { DocumentsABM } from '@/components/DocumentsABM';
 import { PracticesABM } from '@/components/PracticesABM';
@@ -43,7 +44,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { usePagination } from '@/hooks/usePagination';
 import { useAdmin } from '@/lib/admin-context';
 import { apiClient } from '@/services/ApiClient';
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Copy, Plus, Power, Save, Settings, Shield, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, ClipboardList, Copy, Plus, Power, Save, Settings, Shield, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -139,6 +140,8 @@ const AdminPanel = ({ tabId }: { tabId?: string }) => {
   const currentTab = tabId || contextTab;
   const [showPromptConfigModal, setShowPromptConfigModal] = useState(false);
   const [selectedCourseForPromptConfig, setSelectedCourseForPromptConfig] = useState<any>(null);
+  const [rubricDialogOpen, setRubricDialogOpen] = useState(false);
+  const [selectedCourseForRubric, setSelectedCourseForRubric] = useState<any>(null);
   const [courseFilter, setCourseFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const {
     data: courses,
@@ -986,6 +989,17 @@ const AdminPanel = ({ tabId }: { tabId?: string }) => {
                       <Button variant="outline" size="sm" title="Duplicar curso" onClick={() => handleDuplicate(course)}>
                         <Copy className="w-4 h-4" />
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        title="Rúbrica del curso"
+                        onClick={() => {
+                          setSelectedCourseForRubric(course);
+                          setRubricDialogOpen(true);
+                        }}
+                      >
+                        <ClipboardList className="w-4 h-4" />
+                      </Button>
                       <Button variant="outline" size="sm" onClick={() => handleEdit(course)}>
                         <Settings className="w-4 h-4" />
                       </Button>
@@ -1115,6 +1129,29 @@ const AdminPanel = ({ tabId }: { tabId?: string }) => {
       </main>
 
       {/* Confirmación de eliminación permanente de curso */}
+      <Dialog
+        open={rubricDialogOpen}
+        onOpenChange={(open) => {
+          setRubricDialogOpen(open);
+          if (!open) setSelectedCourseForRubric(null);
+        }}
+      >
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Rúbrica del curso</DialogTitle>
+            <DialogDescription>
+              Configure niveles, criterios y descriptores de evaluación humana.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedCourseForRubric && (
+            <CourseRubricABM
+              courseId={selectedCourseForRubric.id}
+              courseTitle={selectedCourseForRubric.title}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog open={!!hardDeleteCourseId} onOpenChange={o => { if (!o) setHardDeleteCourseId(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
