@@ -31,22 +31,35 @@ export class CourseRubricService {
 
   async getActiveRubricForCourse(courseId: string) {
     const course = await this.resolveCourse(courseId);
-    const rubric = await this.prisma.courseRubric.findFirst({
-      where: { course_id: course.id, active: true },
-      include: {
-        criteria: {
-          where: { active: true },
-          orderBy: { sort_order: 'asc' },
-          include: {
-            descriptors: { include: { level: true } },
-          },
-        },
-        levels: {
-          where: { active: true },
-          orderBy: { sort_order: 'asc' },
+    const rubricInclude = {
+      criteria: {
+        where: { active: true },
+        orderBy: { sort_order: 'asc' as const },
+        include: {
+          descriptors: { include: { level: true } },
         },
       },
+      levels: {
+        where: { active: true },
+        orderBy: { sort_order: 'asc' as const },
+      },
+    };
+
+    let rubric = await this.prisma.courseRubric.findFirst({
+      where: { course_id: course.id, active: true },
+      include: rubricInclude,
     });
+
+    // Existing courses (pre-feature) have no row — seed gate skips backfill on deploy.
+    // Lazy-clone like updateRubric so Admin ABM / teacher Calificar don't 404.
+    if (!rubric) {
+      await this.cloneDefaultRubricToCourse(course.id);
+      rubric = await this.prisma.courseRubric.findFirst({
+        where: { course_id: course.id, active: true },
+        include: rubricInclude,
+      });
+    }
+
     if (!rubric) {
       throw new NotFoundException('Active rubric not found for course');
     }
