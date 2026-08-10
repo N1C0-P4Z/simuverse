@@ -1,52 +1,14 @@
 'use client'
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { SponsorCarousel, SponsorItem } from '@/components/SponsorCarousel';
-import { apiClient } from '@/services/ApiClient';
-import { Code2 } from 'lucide-react';
 
 interface FooterProps {
-  sponsors?: SponsorItem[];
-  courseId?: string;
   className?: string;
 }
 
-export function Footer({ sponsors: initialSponsors, courseId: propCourseId, className = '' }: FooterProps) {
+export function Footer({ className = '' }: FooterProps) {
   const pathname = usePathname();
-
-
-  const match = pathname?.match(/^\/(?:simulation|courses)\/([a-zA-Z0-9-]+)/);
-  const courseId = propCourseId || (match ? match[1] : undefined);
-
-  const [sponsors, setSponsors] = useState<SponsorItem[]>(initialSponsors || []);
   const [imgError, setImgError] = useState(false);
-
-  useEffect(() => {
-    if (initialSponsors) {
-      setSponsors(initialSponsors);
-      return;
-    }
-
-    let isMounted = true;
-    const fetchSponsors = async () => {
-      try {
-        const endpoint = courseId ? `/courses/${courseId}/sponsors` : '/sponsors';
-        const res = await apiClient.get(endpoint);
-        const raw = res.data?.data ?? res.data;
-        const data = Array.isArray(raw) ? raw : [];
-        if (isMounted) {
-          setSponsors(data.filter((s: any) => s && s.is_active !== false));
-        }
-      } catch {
-        if (isMounted) setSponsors([]);
-      }
-    };
-
-    fetchSponsors();
-    return () => {
-      isMounted = false;
-    };
-  }, [courseId, initialSponsors]);
 
   if (pathname?.startsWith('/auth')) {
     return null;
@@ -54,15 +16,7 @@ export function Footer({ sponsors: initialSponsors, courseId: propCourseId, clas
 
   return (
     <footer className={`w-full bg-slate-900 text-slate-300 border-t border-slate-800 ${className}`}>
-      <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
-        {/* Sponsors Carousel */}
-        {sponsors.length > 0 && (
-          <div className="border-b border-slate-800 pb-6">
-            <SponsorCarousel sponsors={sponsors} title="Patrocinadores" />
-          </div>
-        )}
-
-        {/* LambdaWorks Footer Info */}
+      <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-400">
           <a
             href="https://lambdaworks.ar/"
