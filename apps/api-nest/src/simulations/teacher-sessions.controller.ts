@@ -1,12 +1,15 @@
 import {
   Controller,
   Get,
+  Post,
   Param,
+  Body,
   Query,
   UseGuards,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { IsObject, IsOptional, IsString } from 'class-validator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -14,12 +17,26 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { paginate } from '../common/helpers/paginate';
 import { PrismaService } from '../prisma/prisma.service';
+import { SessionRubricReviewService } from '../rubrics/session-rubric-review.service';
+import { RubricScores } from '../rubrics/course-rubric.service';
+
+class SubmitRubricReviewDto {
+  @IsObject()
+  scores: RubricScores;
+
+  @IsOptional()
+  @IsString()
+  comment?: string;
+}
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('teacher', 'admin', 'ministerio')
 @Controller('teacher/sessions')
 export class TeacherSessionsController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly rubricReviewService: SessionRubricReviewService,
+  ) {}
 
   /**
    * List simulation instances for courses/students visible to the teacher.
@@ -160,6 +177,7 @@ export class TeacherSessionsController {
         student_name: instance.student?.name,
         student_email: instance.student?.email,
         student_id: instance.student_id,
+        course_id: instance.course_id,
         course_title: instance.course?.title,
         scenario_title: instance.scenario?.title,
         scenario_type: instance.scenario?.scenario_type,
@@ -201,5 +219,26 @@ export class TeacherSessionsController {
         student_turns: logs.filter((l) => l.speaker === 'student').length,
       },
     };
+  }
+
+  @Get(':id/rubric-review')
+  async getRubricReview(@Param('id') id: string, @CurrentUser() user: any) {
+    const review = await this.rubricReviewService.getReview(id, user);
+    return { review };
+  }
+
+  @Post(':id/rubric-review')
+  async submitRubricReview(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() dto: SubmitRubricReviewDto,
+  ) {
+    const review = await this.rubricReviewService.upsertReview(
+      id,
+      user.id,
+      user,
+      dto,
+    );
+    return { review };
   }
 }

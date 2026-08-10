@@ -4,12 +4,14 @@
  * TeacherSessionsPage — lista sesiones del curso filtradas por alumno,
  * con detalle de mensajes agrupados por hora.
  */
+import { SessionRubricPanel, RubricStatusBadge } from '@/components/SimulationSessionViewer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { apiClient } from '@/services/ApiClient';
-import { Bot, Clock, Download, FileText, MessageSquare, Search, User } from 'lucide-react';
+import { Bot, ClipboardCheck, Clock, Download, FileText, MessageSquare, Search, User } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -50,11 +52,18 @@ interface SessionSubmission {
 }
 
 interface SessionDetail {
-  instance: SessionRow & { practice_summary?: string };
+  instance: SessionRow & { practice_summary?: string; course_id?: string };
   logs_by_hour: HourGroup[];
   summary: { total_turns: number; student_turns: number };
   submissions?: SessionSubmission[];
 }
+
+type RubricBadgeState = {
+  passed: boolean;
+  total_score: number;
+  max_score: number;
+  reviewed_at: string;
+} | null;
 
 export default function TeacherSessionsPage() {
   const [sessions, setSessions] = useState<SessionRow[]>([]);
@@ -65,6 +74,8 @@ export default function TeacherSessionsPage() {
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailTab, setDetailTab] = useState('chat');
+  const [reviewBySession, setReviewBySession] = useState<Record<string, RubricBadgeState>>({});
 
   useEffect(() => {
     apiClient.get('/courses/dropdown/list').then((res) => {
@@ -95,6 +106,26 @@ export default function TeacherSessionsPage() {
     loadSessions();
   }, [courseId, studentId]);
 
+  useEffect(() => {
+    apiClient
+      .get('/rubric-reviews?limit=100')
+      .then((res) => {
+        const rows = Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
+        const map: Record<string, RubricBadgeState> = {};
+        for (const r of rows) {
+          if (!r?.simulation_instance_id) continue;
+          map[r.simulation_instance_id] = {
+            passed: !!r.passed,
+            total_score: Number(r.total_score) || 0,
+            max_score: Number(r.max_score) || 0,
+            reviewed_at: r.reviewed_at,
+          };
+        }
+        setReviewBySession(map);
+      })
+      .catch(() => {});
+  }, [courseId, studentId, sessions.length]);
+
   const studentOptions = useMemo(() => {
     const byId = new Map<string, { id: string; name: string; email: string }>();
     for (const s of sessions) {
@@ -121,6 +152,7 @@ export default function TeacherSessionsPage() {
 
   const openDetail = async (id: string) => {
     setDetailLoading(true);
+    setDetailTab('chat');
     try {
       const res = await apiClient.get(`/teacher/sessions/${id}`);
       setDetail(res.data);
@@ -206,9 +238,12 @@ export default function TeacherSessionsPage() {
                     onClick={() => openDetail(s.id)}
                     className="w-full text-left border rounded-md p-3 hover:bg-muted/50 transition"
                   >
-                    <div className="flex justify-between gap-2">
+                    <div className="flex justify-between gap-2 items-start">
                       <span className="font-medium">{s.student_name}</span>
-                      <Badge variant="outline">{s.status}</Badge>
+                      <div className="flex flex-col items-end gap-1">
+                        <Badge variant="outline">{s.status}</Badge>
+                        <RubricStatusBadge review={reviewBySession[s.id] ?? null} />
+                      </div>
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">
                       {s.course_title} · {s.agent_key || s.scenario_title} ·{' '}
@@ -255,95 +290,130 @@ export default function TeacherSessionsPage() {
                 )}
               </div>
 
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  Entregas ({detail.submissions?.length ?? 0})
-                </h3>
-                {!detail.submissions?.length ? (
-                  <p className="text-xs text-muted-foreground">Sin archivos subidos en esta sesión.</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {detail.submissions.map((f) => (
-                      <li
-                        key={f.id}
-                        className="flex items-center justify-between gap-2 border rounded-md px-3 py-2"
-                      >
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{f.file_name}</p>
-                          <p className="text-[11px] text-muted-foreground">
-                            {f.file_type} · {Math.round(Number(f.file_size_bytes) / 1024)} KB ·{' '}
-                            {new Date(f.created_at).toLocaleString('es-AR')}
-                          </p>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="shrink-0"
-                          onClick={async () => {
-                            try {
-                              const res = await apiClient.get(f.download_url, {
-                                responseType: 'blob',
-                              } as any);
-                              const blob = new Blob([res.data]);
-                              const url = URL.createObjectURL(blob);
-                              const a = Object.assign(document.createElement('a'), {
-                                href: url,
-                                download: f.file_name,
-                              });
-                              a.click();
-                              URL.revokeObjectURL(url);
-                            } catch {
-                              toast.error('No se pudo descargar el archivo');
-                            }
-                          }}
-                        >
-                          <Download className="w-4 h-4 mr-1" /> Descargar
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+              <Tabs value={detailTab} onValueChange={setDetailTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="chat" className="gap-1">
+                    <MessageSquare className="w-3.5 h-3.5" /> Chat
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="rubric"
+                    className="gap-1 bg-blue-600 text-white hover:bg-blue-700 hover:text-white data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=inactive]:bg-blue-600 data-[state=inactive]:text-white"
+                  >
+                    <ClipboardCheck className="w-3.5 h-3.5" /> Calificar
+                  </TabsTrigger>
+                </TabsList>
 
-              {(detail.logs_by_hour || []).map((group) => (
-                <div key={group.hour} className="space-y-2">
-                  <div className="sticky top-0 bg-background/90 text-xs font-semibold text-muted-foreground py-1 border-b">
-                    {new Date(group.hour).toLocaleString()}
+                <TabsContent value="chat" className="mt-3 space-y-4" forceMount hidden={detailTab !== 'chat'}>
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-semibold flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      Entregas ({detail.submissions?.length ?? 0})
+                    </h3>
+                    {!detail.submissions?.length ? (
+                      <p className="text-xs text-muted-foreground">Sin archivos subidos en esta sesión.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {detail.submissions.map((f) => (
+                          <li
+                            key={f.id}
+                            className="flex items-center justify-between gap-2 border rounded-md px-3 py-2"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">{f.file_name}</p>
+                              <p className="text-[11px] text-muted-foreground">
+                                {f.file_type} · {Math.round(Number(f.file_size_bytes) / 1024)} KB ·{' '}
+                                {new Date(f.created_at).toLocaleString('es-AR')}
+                              </p>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="shrink-0"
+                              onClick={async () => {
+                                try {
+                                  const res = await apiClient.get(f.download_url, {
+                                    responseType: 'blob',
+                                  } as any);
+                                  const blob = new Blob([res.data]);
+                                  const url = URL.createObjectURL(blob);
+                                  const a = Object.assign(document.createElement('a'), {
+                                    href: url,
+                                    download: f.file_name,
+                                  });
+                                  a.click();
+                                  URL.revokeObjectURL(url);
+                                } catch {
+                                  toast.error('No se pudo descargar el archivo');
+                                }
+                              }}
+                            >
+                              <Download className="w-4 h-4 mr-1" /> Descargar
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
-                  {group.messages.map((m) => {
-                    const isAi = m.speaker === 'ai' || m.speaker === 'system';
-                    return (
-                      <div
-                        key={m.id}
-                        className={`flex gap-2 ${isAi ? '' : 'flex-row-reverse'}`}
-                      >
-                        <div
-                          className={`w-7 h-7 rounded-full flex items-center justify-center ${
-                            isAi ? 'bg-violet-100' : 'bg-sky-100'
-                          }`}
-                        >
-                          {isAi ? (
-                            <Bot className="w-3.5 h-3.5 text-violet-700" />
-                          ) : (
-                            <User className="w-3.5 h-3.5 text-sky-700" />
-                          )}
-                        </div>
-                        <div
-                          className={`max-w-[80%] text-sm rounded-lg px-3 py-2 ${
-                            isAi ? 'bg-muted' : 'bg-sky-50'
-                          }`}
-                        >
-                          {m.message}
-                          <div className="text-[10px] text-muted-foreground mt-1">
-                            {new Date(m.created_at).toLocaleTimeString()}
-                          </div>
-                        </div>
+
+                  {(detail.logs_by_hour || []).map((group) => (
+                    <div key={group.hour} className="space-y-2">
+                      <div className="sticky top-0 bg-background/90 text-xs font-semibold text-muted-foreground py-1 border-b">
+                        {new Date(group.hour).toLocaleString()}
                       </div>
-                    );
-                  })}
-                </div>
-              ))}
+                      {group.messages.map((m) => {
+                        const isAi = m.speaker === 'ai' || m.speaker === 'system';
+                        return (
+                          <div
+                            key={m.id}
+                            className={`flex gap-2 ${isAi ? '' : 'flex-row-reverse'}`}
+                          >
+                            <div
+                              className={`w-7 h-7 rounded-full flex items-center justify-center ${
+                                isAi ? 'bg-violet-100' : 'bg-sky-100'
+                              }`}
+                            >
+                              {isAi ? (
+                                <Bot className="w-3.5 h-3.5 text-violet-700" />
+                              ) : (
+                                <User className="w-3.5 h-3.5 text-sky-700" />
+                              )}
+                            </div>
+                            <div
+                              className={`max-w-[80%] text-sm rounded-lg px-3 py-2 ${
+                                isAi ? 'bg-muted' : 'bg-sky-50'
+                              }`}
+                            >
+                              {m.message}
+                              <div className="text-[10px] text-muted-foreground mt-1">
+                                {new Date(m.created_at).toLocaleTimeString()}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </TabsContent>
+
+                <TabsContent value="rubric" className="mt-3" forceMount hidden={detailTab !== 'rubric'}>
+                  <SessionRubricPanel
+                    instanceId={detail.instance.id}
+                    courseId={detail.instance.course_id ?? null}
+                    onReviewSaved={(review) => {
+                      setReviewBySession((prev) => ({
+                        ...prev,
+                        [detail.instance.id]: {
+                          passed: review.passed,
+                          total_score: review.total_score,
+                          max_score: review.max_score,
+                          reviewed_at: review.reviewed_at,
+                        },
+                      }));
+                      setDetailTab('chat');
+                    }}
+                  />
+                </TabsContent>
+              </Tabs>
             </div>
           )}
         </Card>

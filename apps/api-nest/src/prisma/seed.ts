@@ -447,6 +447,14 @@ async function main() {
     console.warn('⚠️ Firebase sync skipped in seed:', err?.message || err);
   }
 
+  const { CourseRubricService } = await import('../rubrics/course-rubric.service');
+  const rubricService = new CourseRubricService(prisma as any);
+  const allCourses = await prisma.course.findMany({ select: { id: true, title: true } });
+  for (const c of allCourses) {
+    await rubricService.cloneDefaultRubricToCourse(c.id);
+  }
+  console.log(`✅ Rúbricas base clonadas para ${allCourses.length} curso(s)`);
+
   console.log('\n🎉 Seed completado exitosamente!');
   console.log('\n📋 Credenciales de acceso:');
   console.log('   Email: admin@simuverse.edu | Password: Admin123!');

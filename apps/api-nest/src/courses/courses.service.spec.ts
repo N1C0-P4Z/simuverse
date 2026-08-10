@@ -1,10 +1,12 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { CoursesService } from './courses.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { CourseRubricService } from '../rubrics/course-rubric.service';
 
 describe('CoursesService — association sync', () => {
   let service: CoursesService;
   let prisma: any;
+  let rubricService: any;
 
   beforeEach(() => {
     prisma = {
@@ -23,7 +25,10 @@ describe('CoursesService — association sync', () => {
       flowTemplate: { deleteMany: jest.fn() },
       $transaction: jest.fn((callback: any) => callback(prisma)),
     };
-    service = new CoursesService(prisma as PrismaService);
+    rubricService = {
+      cloneDefaultRubricToCourse: jest.fn().mockResolvedValue({ id: 'rubric-1' }),
+    };
+    service = new CoursesService(prisma as PrismaService, rubricService as CourseRubricService);
   });
 
   describe('create()', () => {

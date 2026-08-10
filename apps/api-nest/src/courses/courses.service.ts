@@ -12,6 +12,7 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { paginate, PaginatedResult } from '../common/helpers/paginate';
+import { CourseRubricService } from '../rubrics/course-rubric.service';
 
 const ENROLL_MAX_ATTEMPTS = 5;
 const ENROLL_WINDOW_MS = 15 * 60 * 1000;
@@ -32,7 +33,10 @@ interface CourseAssociationIds {
 
 @Injectable()
 export class CoursesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private rubricService: CourseRubricService,
+  ) {}
 
   private stripPassword<T extends { password_hash?: string | null }>(
     course: T,
@@ -81,8 +85,11 @@ export class CoursesService {
     };
   }
 
-  async findAllDropdown(isActive?: boolean) {
-    const where = isActive !== undefined ? { is_active: isActive } : {};
+  async findAllDropdown(isActive?: boolean, teacherId?: string) {
+    const where: any = isActive !== undefined ? { is_active: isActive } : {};
+    if (teacherId) {
+      where.teachers = { some: { teacher_id: teacherId } };
+    }
     const courses = await this.prisma.course.findMany({
       where,
       include: this.courseListInclude,
@@ -299,6 +306,8 @@ export class CoursesService {
     if (data.teacher_ids?.length) {
       await this.setTeachers(course.id, data.teacher_ids);
     }
+
+    await this.rubricService.cloneDefaultRubricToCourse(course.id);
 
     const full = await this.findById(course.id);
     return data.password ? { ...full, password_plain: data.password } : full;

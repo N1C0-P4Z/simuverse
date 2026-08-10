@@ -53,7 +53,7 @@ export function GlobalStatsDashboard() {
             <BarChart3 className="w-6 h-6 text-blue-600" />
             Dashboard Estadístico Global
           </h2>
-          <p className="text-muted-foreground mt-1">Resumen general del sistema — actualizado en tiempo real</p>
+          <p className="text-muted-foreground mt-1">Revisiones humanas del sistema — actualizado en tiempo real</p>
         </div>
       </div>
 
@@ -81,7 +81,7 @@ export function GlobalStatsDashboard() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats.total_evaluations}</p>
-                <p className="text-xs text-muted-foreground">Evaluaciones totales</p>
+                <p className="text-xs text-muted-foreground">Revisiones humanas</p>
               </div>
             </div>
           </CardContent>

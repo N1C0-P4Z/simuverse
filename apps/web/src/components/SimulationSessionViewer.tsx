@@ -9,19 +9,25 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Textarea } from '@/components/ui/textarea';
 import {
     Bot,
+    ClipboardCheck,
     Download,
     Filter,
     Hash,
     Info,
+    Loader2,
     MessageSquare,
     Search,
     User,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { apiClient } from '@/services/ApiClient';
+import { toast } from 'sonner';
 
 interface ChatLog {
   id: number;
@@ -66,6 +72,97 @@ interface SessionRow {
   scenario_title: string; scenario_type: string; difficulty: string;
   course_title: string; course_id: string;
   total_turns: number; incorrect_turns: number;
+}
+
+interface RubricLevel {
+  id: string;
+  value: number;
+  label: string;
+  description: string | null;
+  sort_order: number;
+}
+
+interface RubricCriterion {
+  id: string;
+  code: string;
+  label: string;
+  description: string | null;
+  sort_order: number;
+  descriptors: Record<string, string>;
+}
+
+interface CourseRubric {
+  id: string;
+  course_id: string;
+  name: string;
+  pass_threshold: number;
+  active: boolean;
+  levels: RubricLevel[];
+  criteria: RubricCriterion[];
+}
+
+interface RubricReview {
+  id: string;
+  simulation_instance_id: string;
+  scores: Record<string, number>;
+  total_score: number;
+  max_score: number;
+  passed: boolean;
+  pass_threshold_snapshot: number;
+  comment: string | null;
+  reviewed_at: string;
+  reviewer?: { id: string; name: string; email: string };
+  rubric?: { id: string; name: string; pass_threshold: number };
+}
+
+interface RubricReviewSummary {
+  passed: boolean;
+  total_score: number;
+  max_score: number;
+  reviewed_at: string;
+}
+
+function computeScorePreview(
+  rubric: CourseRubric,
+  scores: Record<string, number | undefined>,
+) {
+  const maxLevelValue = Math.max(...rubric.levels.map((l) => l.value));
+  const max = rubric.criteria.length * maxLevelValue;
+  let total = 0;
+  let complete = true;
+  for (const c of rubric.criteria) {
+    const v = scores[c.code];
+    if (v == null) complete = false;
+    else total += v;
+  }
+  return {
+    total,
+    max,
+    passed: total >= rubric.pass_threshold,
+    complete,
+  };
+}
+
+export function RubricStatusBadge({ review }: { review?: RubricReviewSummary | null }) {
+  if (!review) {
+    return (
+      <Badge variant="outline" className="text-xs border-gray-300 text-gray-600">
+        Pendiente
+      </Badge>
+    );
+  }
+  if (review.passed) {
+    return (
+      <Badge className="text-xs bg-green-100 text-green-800 border border-green-300 hover:bg-green-100">
+        Aprobado
+      </Badge>
+    );
+  }
+  return (
+    <Badge className="text-xs bg-red-100 text-red-800 border border-red-300 hover:bg-red-100">
+      No aprobado
+    </Badge>
+  );
 }
 
 // ─── Sub-componente: burbuja de chat ─────────────────────────────────────────
@@ -147,16 +244,309 @@ function ChatBubble({ log, showSolution }: { log: ChatLog; showSolution: boolean
   );
 }
 
+// ─── Panel de evaluación con rúbrica dinámica ────────────────────────────────
+export function SessionRubricPanel({
+  instanceId,
+  courseId,
+  onReviewSaved,
+}: {
+  instanceId: string;
+  courseId: string | null;
+  onReviewSaved?: (review: RubricReview) => void;
+}) {
+  const [rubric, setRubric] = useState<CourseRubric | null>(null);
+  const [review, setReview] = useState<RubricReview | null>(null);
+  const [scores, setScores] = useState<Record<string, number>>({});
+  const [comment, setComment] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [error, setError] = useState('');
+  const [saveError, setSaveError] = useState('');
+
+  useEffect(() => {
+    if (!courseId) {
+      setLoading(false);
+      setError('No se encontró el curso de esta sesión.');
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError('');
+      setEditing(false);
+      try {
+        const [rubricRes, reviewRes] = await Promise.all([
+          apiClient.get(`/courses/${courseId}/rubric`),
+          apiClient.get(`/teacher/sessions/${instanceId}/rubric-review`),
+        ]);
+        if (cancelled) return;
+
+        const rubricData = rubricRes.data as CourseRubric;
+        const existingReview = (reviewRes.data?.review ?? null) as RubricReview | null;
+
+        setRubric(rubricData);
+        setReview(existingReview);
+        setScores(existingReview?.scores ?? {});
+        setComment(existingReview?.comment ?? '');
+        setEditing(!existingReview);
+      } catch {
+        if (!cancelled) {
+          setRubric(null);
+          setReview(null);
+          setError('No se pudo cargar la rúbrica del curso.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [instanceId, courseId]);
+
+  const preview = useMemo(
+    () => (rubric ? computeScorePreview(rubric, scores) : null),
+    [rubric, scores],
+  );
+
+  const canEdit = editing || !review;
+
+  const handleSave = async () => {
+    if (!rubric || !preview?.complete) return;
+    setSaving(true);
+    setSaveError('');
+    try {
+      const res = await apiClient.post(`/teacher/sessions/${instanceId}/rubric-review`, {
+        scores,
+        comment: comment.trim() || undefined,
+      });
+      const saved = res.data.review as RubricReview;
+      setReview(saved);
+      setScores(saved.scores);
+      setComment(saved.comment ?? '');
+      setEditing(false);
+      toast.success(
+        saved.passed
+          ? `Calificación guardada: ${saved.total_score}/${saved.max_score} — Aprobado`
+          : `Calificación guardada: ${saved.total_score}/${saved.max_score} — No aprobado`,
+      );
+      onReviewSaved?.(saved);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message;
+      const text =
+        typeof msg === 'string'
+          ? msg
+          : Array.isArray(msg)
+            ? msg.join(', ')
+            : 'Error al guardar la calificación.';
+      setSaveError(text);
+      toast.error(text);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="py-12 text-center text-gray-500 flex items-center justify-center gap-2">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        Cargando rúbrica...
+      </div>
+    );
+  }
+
+  if (error || !rubric) {
+    return <div className="py-8 text-center text-red-500">{error || 'Rúbrica no disponible.'}</div>;
+  }
+
+  const displayPreview = preview;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h3 className="font-semibold text-sm flex items-center gap-2">
+            <ClipboardCheck className="w-4 h-4 text-blue-600" />
+            {rubric.name}
+          </h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            {rubric.criteria.length} criterios · {rubric.levels.length} niveles · umbral {rubric.pass_threshold}
+          </p>
+        </div>
+        <RubricStatusBadge
+          review={
+            review
+              ? {
+                  passed: review.passed,
+                  total_score: review.total_score,
+                  max_score: review.max_score,
+                  reviewed_at: review.reviewed_at,
+                }
+              : null
+          }
+        />
+      </div>
+
+      {review && (
+        <Card className="p-3 bg-gray-50 text-xs text-gray-600">
+          Evaluado por <span className="font-medium">{review.reviewer?.name ?? '—'}</span>
+          {' · '}
+          {new Date(review.reviewed_at).toLocaleString('es-AR')}
+        </Card>
+      )}
+
+      <div className="space-y-5">
+        {rubric.criteria.map((criterion) => (
+          <Card key={criterion.id} className="p-4">
+            <p className="font-medium text-sm mb-3">{criterion.label}</p>
+            {criterion.description && (
+              <p className="text-xs text-muted-foreground mb-3">{criterion.description}</p>
+            )}
+            <RadioGroup
+              value={scores[criterion.code] != null ? String(scores[criterion.code]) : ''}
+              onValueChange={(v) =>
+                setScores((prev) => ({ ...prev, [criterion.code]: Number(v) }))
+              }
+              disabled={!canEdit}
+              className="space-y-2"
+            >
+              {rubric.levels.map((level) => {
+                const descriptor = criterion.descriptors[String(level.value)];
+                const inputId = `${criterion.code}-${level.value}`;
+                return (
+                  <div
+                    key={level.id}
+                    className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${
+                      scores[criterion.code] === level.value
+                        ? 'border-blue-300 bg-blue-50'
+                        : 'border-gray-200'
+                    } ${!canEdit ? 'opacity-80' : ''}`}
+                  >
+                    <RadioGroupItem value={String(level.value)} id={inputId} className="mt-0.5" disabled={!canEdit} />
+                    <Label htmlFor={inputId} className={`flex-1 font-normal ${canEdit ? 'cursor-pointer' : 'cursor-default'}`}>
+                      <span className="font-medium text-sm">
+                        {level.value} — {level.label}
+                      </span>
+                      {descriptor && (
+                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                          {descriptor}
+                        </p>
+                      )}
+                    </Label>
+                  </div>
+                );
+              })}
+            </RadioGroup>
+          </Card>
+        ))}
+      </div>
+
+      <div>
+        <Label htmlFor="rubric-comment" className="text-sm">
+          Comentario (opcional)
+        </Label>
+        <Textarea
+          id="rubric-comment"
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          placeholder="Observaciones sobre el desempeño del alumno..."
+          className="mt-1.5"
+          rows={3}
+          disabled={!canEdit}
+        />
+      </div>
+
+      {displayPreview && (
+        <Card className={`p-4 ${
+          !displayPreview.complete
+            ? 'bg-gray-50'
+            : displayPreview.passed
+              ? 'bg-green-50 border-green-200'
+              : 'bg-red-50 border-red-200'
+        }`}>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <p className="text-xs text-muted-foreground">Puntaje total</p>
+              <p className="text-2xl font-bold">
+                {displayPreview.total} <span className="text-base font-normal text-muted-foreground">/ {displayPreview.max}</span>
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Umbral de aprobación</p>
+              <p className="text-lg font-semibold">{rubric.pass_threshold}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-muted-foreground mb-1">Estado</p>
+              {!displayPreview.complete ? (
+                <Badge variant="outline" className="text-xs">Incompleto</Badge>
+              ) : (
+                <RubricStatusBadge
+                  review={{
+                    passed: displayPreview.passed,
+                    total_score: displayPreview.total,
+                    max_score: displayPreview.max,
+                    reviewed_at: review?.reviewed_at ?? '',
+                  }}
+                />
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {saveError && <p className="text-sm text-red-600">{saveError}</p>}
+
+      <div className="flex justify-end gap-2">
+        {review && !canEdit ? (
+          <Button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            Editar Calificación
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || !preview?.complete}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            {saving ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Guardando...
+              </>
+            ) : (
+              'Guardar Calificación'
+            )}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Dialog con el detalle de una sesión ─────────────────────────────────────
 function SessionDetailDialog({
-  instanceId, onClose
+  instanceId,
+  courseId,
+  sessions,
+  onClose,
+  onReviewSaved,
 }: {
-  instanceId: string; onClose: () => void;
+  instanceId: string;
+  courseId?: string | null;
+  sessions: SessionRow[];
+  onClose: () => void;
+  onReviewSaved?: (instanceId: string, review: RubricReview) => void;
 }) {
   const [data, setData] = useState<SessionDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [showSolutions, setShowSolutions] = useState(true);
   const [filterSpeaker, setFilterSpeaker] = useState<'all' | 'student' | 'ai'>('all');
+  const [detailTab, setDetailTab] = useState('dialogue');
 
   useEffect(() => {
     (async () => {
@@ -171,6 +561,8 @@ function SessionDetailDialog({
   const filteredLogs = data?.logs.filter(l =>
     filterSpeaker === 'all' || l.speaker === filterSpeaker
   ) ?? [];
+
+  const resolvedCourseId = courseId ?? sessions.find((s) => s.id === instanceId)?.course_id ?? null;
 
   const handleExport = () => {
     if (!data) return;
@@ -243,15 +635,21 @@ function SessionDetailDialog({
               </Card>
             </div>
 
-            <Tabs defaultValue="dialogue" className="mt-4">
-              <TabsList className="grid grid-cols-3 w-full">
+            <Tabs value={detailTab} onValueChange={setDetailTab} className="mt-4">
+              <TabsList className="grid grid-cols-4 w-full">
                 <TabsTrigger value="dialogue">Diálogo</TabsTrigger>
                 <TabsTrigger value="files">Entregas ({data.submissions?.length ?? 0})</TabsTrigger>
+                <TabsTrigger
+                  value="rubric"
+                  className="bg-blue-600 text-white hover:bg-blue-700 hover:text-white data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=inactive]:bg-blue-600 data-[state=inactive]:text-white"
+                >
+                  Calificar
+                </TabsTrigger>
                 <TabsTrigger value="analysis">Resumen</TabsTrigger>
               </TabsList>
 
               {/* ─── DIÁLOGO ─────────────────── */}
-              <TabsContent value="dialogue" className="mt-4">
+              <TabsContent value="dialogue" className="mt-4" forceMount hidden={detailTab !== 'dialogue'}>
                 <div className="flex items-center gap-3 mb-4 flex-wrap">
                   <div className="flex items-center gap-2">
                     <Filter className="w-4 h-4 text-gray-400" />
@@ -288,7 +686,7 @@ function SessionDetailDialog({
                 </div>
               </TabsContent>
 
-              <TabsContent value="files" className="mt-4">
+              <TabsContent value="files" className="mt-4" forceMount hidden={detailTab !== 'files'}>
                 {!data.submissions?.length ? (
                   <p className="text-center text-gray-400 py-8">Sin archivos entregados en esta sesión.</p>
                 ) : (
@@ -334,8 +732,19 @@ function SessionDetailDialog({
                 )}
               </TabsContent>
 
+              <TabsContent value="rubric" className="mt-4" forceMount hidden={detailTab !== 'rubric'}>
+                <SessionRubricPanel
+                  instanceId={instanceId}
+                  courseId={resolvedCourseId}
+                  onReviewSaved={(review) => {
+                    onReviewSaved?.(instanceId, review);
+                    setDetailTab('dialogue');
+                  }}
+                />
+              </TabsContent>
+
               {/* ─── RESUMEN ─────────────────── */}
-              <TabsContent value="analysis" className="mt-4 space-y-4">
+              <TabsContent value="analysis" className="mt-4 space-y-4" forceMount hidden={detailTab !== 'analysis'}>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <Card className="p-4 text-center">
                     <p className="text-3xl font-bold text-blue-700">{summary.total_turns}</p>
@@ -363,15 +772,36 @@ function SessionDetailDialog({
 // ─── Componente Principal: SimulationSessionViewer ───────────────────────────
 export function SimulationSessionViewer() {
   const [sessions, setSessions] = useState<SessionRow[]>([]);
+  const [reviewsByInstanceId, setReviewsByInstanceId] = useState<Record<string, RubricReviewSummary>>({});
   const [loading, setLoading] = useState(true);
   const [filterStudent, setFilterStudent] = useState('');
   const [filterCourse, setFilterCourse] = useState('all');
   const [filterType, setFilterType] = useState<'all' | 'evaluation' | 'practice'>('all');
-  const [selectedSession, setSelectedSession] = useState<string | null>(null);
+  const [selectedSession, setSelectedSession] = useState<{ id: string; courseId?: string } | null>(null);
   const [refSearch, setRefSearch] = useState('');
   const [refResult, setRefResult] = useState<any>(null);
   const [refLoading, setRefLoading] = useState(false);
   const [refError, setRefError] = useState('');
+
+  const fetchReviews = async () => {
+    try {
+      const res = await apiClient.get('/rubric-reviews?limit=100&page=1');
+      const items: Array<{ simulation_instance_id: string; passed: boolean; total_score: number; max_score: number; reviewed_at: string }> =
+        res.data?.data ?? [];
+      const map: Record<string, RubricReviewSummary> = {};
+      for (const r of items) {
+        map[r.simulation_instance_id] = {
+          passed: r.passed,
+          total_score: r.total_score,
+          max_score: r.max_score,
+          reviewed_at: r.reviewed_at,
+        };
+      }
+      setReviewsByInstanceId(map);
+    } catch {
+      setReviewsByInstanceId({});
+    }
+  };
 
   const fetchSessions = async () => {
     setLoading(true);
@@ -383,7 +813,26 @@ export function SimulationSessionViewer() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchSessions(); }, []);
+  useEffect(() => {
+    fetchSessions();
+    fetchReviews();
+  }, []);
+
+  const handleReviewSaved = (instanceId: string, review: RubricReview) => {
+    setReviewsByInstanceId((prev) => ({
+      ...prev,
+      [instanceId]: {
+        passed: review.passed,
+        total_score: review.total_score,
+        max_score: review.max_score,
+        reviewed_at: review.reviewed_at,
+      },
+    }));
+  };
+
+  const openSession = (id: string, courseId?: string) => {
+    setSelectedSession({ id, courseId });
+  };
 
   const handleRefSearch = async () => {
     if (!refSearch.trim()) return;
@@ -461,7 +910,7 @@ export function SimulationSessionViewer() {
               </p>
             )}
             <Button size="sm" variant="outline" className="mt-2"
-              onClick={() => setSelectedSession(refResult.simulation_instance_id)}>
+              onClick={() => openSession(refResult.simulation_instance_id)}>
               Ver sesión completa
             </Button>
           </div>
@@ -504,6 +953,7 @@ export function SimulationSessionViewer() {
                 <th className="px-4 py-3 text-left">Curso / Escenario</th>
                 <th className="px-4 py-3 text-center">Tipo</th>
                 <th className="px-4 py-3 text-center">Score</th>
+                <th className="px-4 py-3 text-center">Calificación</th>
                 <th className="px-4 py-3 text-center">Aciertos</th>
                 <th className="px-4 py-3 text-center">Tiempo</th>
                 <th className="px-4 py-3 text-left">Fecha</th>
@@ -512,7 +962,7 @@ export function SimulationSessionViewer() {
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-400">Sin sesiones para los filtros aplicados.</td></tr>
+                <tr><td colSpan={9} className="px-4 py-10 text-center text-gray-400">Sin sesiones para los filtros aplicados.</td></tr>
               ) : filtered.map(s => (
                 <tr key={s.id} className="border-b hover:bg-gray-50">
                   <td className="px-4 py-3">
@@ -529,6 +979,9 @@ export function SimulationSessionViewer() {
                     </Badge>
                   </td>
                   <td className="px-4 py-3 text-center">{scoreBadge(s.score)}</td>
+                  <td className="px-4 py-3 text-center">
+                    <RubricStatusBadge review={reviewsByInstanceId[s.id]} />
+                  </td>
                   <td className="px-4 py-3 text-center">
                     {s.total_turns > 0 ? (
                       <div className="flex items-center justify-center gap-1 text-xs">
@@ -548,7 +1001,7 @@ export function SimulationSessionViewer() {
                     {s.started_at ? new Date(s.started_at).toLocaleDateString('es-AR') : '—'}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <Button size="sm" variant="outline" onClick={() => setSelectedSession(s.id)}
+                    <Button size="sm" variant="outline" onClick={() => openSession(s.id, s.course_id)}
                       className="text-purple-700 border-purple-300 hover:bg-purple-50">
                       <MessageSquare className="w-4 h-4 mr-1" /> Ver
                     </Button>
@@ -562,8 +1015,11 @@ export function SimulationSessionViewer() {
 
       {selectedSession && (
         <SessionDetailDialog
-          instanceId={selectedSession}
+          instanceId={selectedSession.id}
+          courseId={selectedSession.courseId}
+          sessions={sessions}
           onClose={() => setSelectedSession(null)}
+          onReviewSaved={handleReviewSaved}
         />
       )}
     </div>

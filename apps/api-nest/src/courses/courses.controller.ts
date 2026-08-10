@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { IsString, IsOptional, IsBoolean, IsArray, IsInt, MinLength } from 'class-validator';
 import { CoursesService } from './courses.service';
+import { CourseRubricService } from '../rubrics/course-rubric.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
@@ -183,7 +184,10 @@ class EnrollDto {
 @Controller('courses')
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class CoursesController {
-  constructor(private coursesService: CoursesService) {}
+  constructor(
+    private coursesService: CoursesService,
+    private rubricService: CourseRubricService,
+  ) {}
 
   @Get()
   async findAll(
@@ -199,9 +203,13 @@ export class CoursesController {
   }
 
   @Get('dropdown/list')
-  async findAllDropdown(@Query('is_active') isActive?: string) {
+  async findAllDropdown(
+    @Query('is_active') isActive?: string,
+    @CurrentUser() user?: any,
+  ) {
     const active = isActive !== undefined ? isActive === 'true' : undefined;
-    return this.coursesService.findAllDropdown(active);
+    const teacherId = user?.role === 'teacher' ? user.id : undefined;
+    return this.coursesService.findAllDropdown(active, teacherId);
   }
 
   @Get('catalog')
@@ -217,6 +225,12 @@ export class CoursesController {
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
     });
+  }
+
+  @Get(':courseId/rubric')
+  @Roles('admin', 'teacher', 'ministerio', 'student')
+  async getRubric(@Param('courseId') courseId: string) {
+    return this.rubricService.getActiveRubricForCourse(courseId);
   }
 
   @Get(':courseId')

@@ -188,6 +188,7 @@ model User {
   terms_acceptances              UserTermsAcceptance[]
   course_teachers                CourseTeacher[]
   enrollment_attempts            EnrollmentAttempt[]
+  session_rubric_reviews         SessionRubricReview[]
 
   @@index([email])
   @@index([created_at])
@@ -241,6 +242,7 @@ model Course {
   course_simulated_companies CourseSimulatedCompany[]
   course_foundation_configs  CourseFoundationConfig[]
   course_sponsors            CourseSponsor[]
+  course_rubrics             CourseRubric[]
 
   @@index([category])
   @@map("courses")
@@ -373,9 +375,10 @@ model SimulationInstance {
   student       User           @relation(fields: [student_id], references: [id], onDelete: Cascade)
   course        Course         @relation(fields: [course_id], references: [id], onDelete: Cascade)
   scenario      Scenario       @relation(fields: [scenario_id], references: [id])
-  logs          PracticeLogs[]
-  notifications Notification[]
-  file_uploads  FileUpload[]
+  logs                  PracticeLogs[]
+  notifications         Notification[]
+  file_uploads          FileUpload[]
+  session_rubric_review SessionRubricReview?
 
   @@index([course_id, student_id])
   @@map("simulation_instances")
@@ -1031,4 +1034,92 @@ model SimulatedCompany {
 
   @@unique([name])
   @@map("simulated_companies")
+}
+
+// ── Course Rubrics ─────────────────────────────────────────────────
+
+model CourseRubric {
+  id             String   @id @default(uuid()) @db.VarChar(36)
+  course_id      String   @db.VarChar(36)
+  name           String   @db.VarChar(255)
+  pass_threshold Int
+  active         Boolean  @default(true)
+  created_at     DateTime @default(now())
+
+  course  Course                @relation(fields: [course_id], references: [id], onDelete: Cascade)
+  criteria RubricCriterion[]
+  levels   RubricLevel[]
+  reviews  SessionRubricReview[]
+
+  @@index([course_id])
+  @@map("course_rubrics")
+}
+
+model RubricCriterion {
+  id               String  @id @default(uuid()) @db.VarChar(36)
+  course_rubric_id String  @db.VarChar(36)
+  code             String  @db.VarChar(50)
+  label            String  @db.VarChar(255)
+  description      String? @db.Text
+  sort_order       Int     @default(0)
+  active           Boolean @default(true)
+
+  course_rubric CourseRubric                     @relation(fields: [course_rubric_id], references: [id], onDelete: Cascade)
+  descriptors   RubricCriterionLevelDescriptor[]
+
+  @@unique([course_rubric_id, code])
+  @@index([course_rubric_id])
+  @@map("rubric_criteria")
+}
+
+model RubricLevel {
+  id               String  @id @default(uuid()) @db.VarChar(36)
+  course_rubric_id String  @db.VarChar(36)
+  value            Int
+  label            String  @db.VarChar(100)
+  description      String? @db.Text
+  sort_order       Int     @default(0)
+  active           Boolean @default(true)
+
+  course_rubric CourseRubric                     @relation(fields: [course_rubric_id], references: [id], onDelete: Cascade)
+  descriptors   RubricCriterionLevelDescriptor[]
+
+  @@unique([course_rubric_id, value])
+  @@index([course_rubric_id])
+  @@map("rubric_levels")
+}
+
+model RubricCriterionLevelDescriptor {
+  id           String @id @default(uuid()) @db.VarChar(36)
+  criterion_id String @db.VarChar(36)
+  level_id     String @db.VarChar(36)
+  descriptor   String @db.Text
+
+  criterion RubricCriterion @relation(fields: [criterion_id], references: [id], onDelete: Cascade)
+  level     RubricLevel     @relation(fields: [level_id], references: [id], onDelete: Cascade)
+
+  @@unique([criterion_id, level_id])
+  @@map("rubric_criterion_level_descriptors")
+}
+
+model SessionRubricReview {
+  id                      String   @id @default(uuid()) @db.VarChar(36)
+  simulation_instance_id  String   @unique @db.VarChar(36)
+  course_rubric_id        String   @db.VarChar(36)
+  reviewer_id             String   @db.VarChar(36)
+  scores                  Json
+  total_score             Int
+  max_score               Int
+  passed                  Boolean
+  pass_threshold_snapshot Int
+  comment                 String?  @db.Text
+  reviewed_at             DateTime @default(now())
+
+  simulation_instance SimulationInstance @relation(fields: [simulation_instance_id], references: [id], onDelete: Cascade)
+  course_rubric       CourseRubric       @relation(fields: [course_rubric_id], references: [id], onDelete: Cascade)
+  reviewer            User               @relation(fields: [reviewer_id], references: [id], onDelete: Cascade)
+
+  @@index([course_rubric_id])
+  @@index([reviewer_id])
+  @@map("session_rubric_reviews")
 }

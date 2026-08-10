@@ -1,0 +1,70 @@
+Propósito
+Evaluar:
+el nivel de comprensión de la consigna,
+la pertinencia de las respuestas,
+la toma de decisiones,
+la aplicación de conceptos teóricos al caso,
+la resolución de problemas,
+la coherencia argumentativa,
+el grado de cumplimiento de los objetivos de aprendizaje de cada unidad.
+Instrucciones para construir la rúbrica
+Identifica los objetivos específicos de la unidad.
+Define criterios de evaluación alineados con esos objetivos.
+Establece 4 niveles de desempeño.
+Redacta descriptores concretos y observables.
+Asigna puntaje por criterio.
+Incluye una interpretación del resultado final.
+Asegura que la rúbrica pueda reutilizarse en distintas unidades del simulador.
+Rúbrica base
+Criterio
+Nivel 1: No logrado
+Nivel 2: Parcialmente logrado
+Nivel 3: Logrado
+Nivel 4: Sobresaliente
+1. Comprensión de la consigna
+No comprende la consigna o responde fuera de tema.
+Comprende solo una parte de la consigna.
+Comprende la consigna y responde de manera adecuada.
+Comprende plenamente la consigna y responde con precisión, profundidad y foco.
+2. Pertinencia de la respuesta
+La respuesta no se relaciona con el objetivo de la unidad.
+La respuesta se relaciona de forma incompleta o débil.
+La respuesta es pertinente y responde al objetivo planteado.
+La respuesta es altamente pertinente, completa y muy bien ajustada al objetivo.
+3. Aplicación de contenidos
+No aplica los contenidos trabajados.
+Aplica los contenidos de forma superficial o con errores.
+Aplica correctamente los contenidos de la unidad.
+Aplica los contenidos con solvencia, integración y criterio profesional.
+4. Toma de decisiones
+Las decisiones son inadecuadas o arbitrarias.
+Las decisiones son parcialmente correctas, pero poco justificadas.
+Las decisiones son adecuadas y coherentes con la situación.
+Las decisiones son óptimas, justificadas y estratégicamente fundamentadas.
+5. Resolución de problemas
+No resuelve la situación o lo hace de forma incorrecta.
+Resuelve parcialmente, con errores importantes.
+Resuelve la situación de manera correcta.
+Resuelve la situación con eficacia, creatividad y criterio analítico.
+6. Argumentación
+No fundamenta sus respuestas o lo hace de forma incorrecta.
+Fundamenta de manera débil o incompleta.
+Fundamenta con coherencia y respaldo conceptual.
+Fundamenta con solidez, claridad y alto nivel de reflexión.
+7. Cumplimiento de objetivos de la unidad
+No alcanza los objetivos.
+Alcanza algunos objetivos de manera parcial.
+Alcanza la mayoría de los objetivos de la unidad.
+Supera los objetivos de la unidad con alto nivel de dominio.
+8. Autonomía y consistencia
+Depende totalmente de ayudas o responde de forma inconsistente.
+Presenta autonomía limitada e inconsistencias frecuentes.
+Responde con autonomía y consistencia aceptable.
+Responde con total autonomía, consistencia y seguridad.
+Escala sugerida
+1 = No logrado
+2 = Parcialmente logrado
+3 = Logrado
+4 = Sobresaliente
+Puntaje total sugerido:
+ 32 puntos.
